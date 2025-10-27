@@ -5,43 +5,136 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create Module - PostgreSQL Viewer</title>
     <style>
+        /* General styling */
         body {
             font-family: 'Poppins', sans-serif;
-            background: linear-gradient(135deg, #d3e9ff, #f0f9ff);
+            background: linear-gradient(135deg, #a7c6ff, #e3f2ff, #ffffff);
+            background-attachment: fixed;
             margin: 0;
-            padding: 40px;
+            padding: 50px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
         }
+
+        /* Card container */
         .container {
-            background: white;
-            padding: 30px 40px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
             border-radius: 20px;
-            box-shadow: 0 4px 25px rgba(0,0,0,0.1);
-            max-width: 600px;
-            margin: auto;
+            box-shadow: 0 10px 35px rgba(0, 0, 0, 0.1);
+            padding: 40px 50px;
+            width: 100%;
+            max-width: 650px;
+            animation: fadeIn 0.8s ease-in-out;
         }
+
+        /* Animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Header */
         h2 {
             color: #0078d7;
             text-align: center;
+            margin-bottom: 25px;
+            font-weight: 600;
+            letter-spacing: 1px;
         }
+
+        /* Checkbox list */
+        ul {
+            list-style: none;
+            padding: 0;
+            margin-bottom: 20px;
+            max-height: 220px;
+            overflow-y: auto;
+            border: 1px solid #d3e3ff;
+            border-radius: 10px;
+            background: #f8fbff;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+        }
+
+        li {
+            padding: 10px 15px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #eef4ff;
+            transition: 0.2s ease;
+        }
+
+        li:last-child { border-bottom: none; }
+
+        li:hover {
+            background: #eef6ff;
+            transform: translateX(3px);
+        }
+
+        /* Custom checkbox */
+        input[type="checkbox"] {
+            accent-color: #0078d7;
+            transform: scale(1.2);
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        /* Input field */
         input[type="text"] {
-            width: 95%;
-            padding: 10px;
+            width: 100%;
+            padding: 12px 14px;
             margin-top: 10px;
             border-radius: 10px;
-            border: 1px solid #ccc;
-        }
-        button {
-            background: #0078d7;
-            color: white;
-            padding: 10px 30px;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
+            border: 1px solid #cddffb;
+            outline: none;
             transition: 0.3s;
+            font-size: 15px;
         }
-        button:hover { background: #005fa3; }
-        ul { list-style: none; padding-left: 0; }
-        li { margin-bottom: 5px; }
+
+        input[type="text"]:focus {
+            border-color: #0078d7;
+            box-shadow: 0 0 10px rgba(0, 120, 215, 0.2);
+        }
+
+        /* Button */
+        button {
+            background: linear-gradient(135deg, #0078d7, #005fa3);
+            color: white;
+            padding: 12px 35px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: block;
+            margin: 25px auto 0;
+            font-size: 16px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        button:hover {
+            background: linear-gradient(135deg, #006dcc, #004d8c);
+            transform: scale(1.03);
+            box-shadow: 0 6px 15px rgba(0, 120, 215, 0.3);
+        }
+
+        label {
+            font-weight: 600;
+            color: #333;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        /* Scrollbar styling */
+        ul::-webkit-scrollbar {
+            width: 6px;
+        }
+        ul::-webkit-scrollbar-thumb {
+            background: #b9d4f5;
+            border-radius: 10px;
+        }
     </style>
 </head>
 <body>
@@ -52,7 +145,10 @@
             <label><strong>Select Tables:</strong></label>
             <ul>
                 {% for table in tables %}
-                    <li><input type="checkbox" name="selected_tables" value="{{ table }}"> {{ table }}</li>
+                    <li>
+                        <input type="checkbox" name="selected_tables" value="{{ table }}">
+                        {{ table }}
+                    </li>
                 {% endfor %}
             </ul>
 
