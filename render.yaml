@@ -2,20 +2,19 @@ services:
   - type: web
     name: django-app
     env: python
+    plan: free
+    branch: deploy
     buildCommand: "./build.sh"
-    startCommand: "gunicorn DJANGO-APP_TEXT_TO_SQL.wsgi:application"
+    startCommand: "gunicorn mysite.wsgi:application"
     envVars:
-      - key: DEBUG
-        value: "False"
-      - key: SECRET_KEY
-        generateValue: true
       - key: DATABASE_URL
         fromDatabase:
           name: haldiram-db
           property: connectionString
-      - key: DJANGO_SETTINGS_MODULE
-        value: "your_project_name.settings"
-
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.13.0
 databases:
   - name: haldiram-db
 

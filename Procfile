@@ -1,1 +1,1 @@
-web: gunicorn DJANGO-APP_TEXT_TO_SQL.wsgi:application
+web: gunicorn mysite.wsgi:application
