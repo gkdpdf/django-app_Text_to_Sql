@@ -1,2 +1,6 @@
-psycopg2-binary
-django
+asgiref==3.10.0
+Django==5.2.7
+pip==25.2
+psycopg2-binary==2.9.11
+setuptools==80.9.0
+sqlparse==0.5.3
