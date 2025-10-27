@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Module - PostgreSQL Viewer</title>
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #d3e9ff, #f0f9ff);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 40px 60px;
+            border-radius: 20px;
+            box-shadow: 0 4px 25px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        h2 { color: #0078d7; }
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        button {
+            background: #0078d7;
+            color: white;
+            padding: 10px 30px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        button:hover { background: #005fa3; }
+        a {
+            display: inline-block;
+            margin-top: 20px;
+            text-decoration: none;
+            color: #0078d7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Edit Module: {{ module.name }}</h2>
+        <form method="POST" enctype="multipart/form-data">
+            {% csrf_token %}
+            <label>Upload Knowledge Graph:</label><br>
+            <input type="file" name="knowledge_graph"><br><br>
+            <label>Upload Metrics:</label><br>
+            <input type="file" name="metrics"><br><br>
+            <button type="submit">Save Changes</button>
+        </form>
+        <a href="{% url 'dashboard' %}">← Back to Dashboard</a>
+    </div>
+</body>
+</html>

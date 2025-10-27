@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Module Created</title>
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #d3e9ff, #f0f9ff);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 40px 50px;
+            border-radius: 20px;
+            box-shadow: 0 4px 25px rgba(0,0,0,0.1);
+            text-align: center;
+            width: 420px;
+        }
+        h2 {
+            color: #0078d7;
+            margin-bottom: 15px;
+        }
+        p {
+            color: #333;
+            font-size: 1em;
+        }
+        a {
+            display: inline-block;
+            margin-top: 20px;
+            background: #0078d7;
+            color: white;
+            padding: 10px 25px;
+            border-radius: 10px;
+            text-decoration: none;
+            transition: 0.3s;
+        }
+        a:hover {
+            background: #005fa3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>✅ Module "{{ module_name }}" Created Successfully!</h2>
+        <p><strong>Tables Used:</strong> {{ tables|join:", " }}</p>
+        <p>Your Knowledge Graph and Metrics files were uploaded successfully.</p>
+        <a href="{% url 'login' %}">Back to Home</a>
+    </div>
+</body>
+</html>
