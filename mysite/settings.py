@@ -22,7 +22,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-=4nu=ad_03(k2=3z#c%+8zhbt*^kf0$@3pr&#(uexx5%k&60#*'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-abc123xyz!@#randomtext')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -101,12 +101,15 @@ DATABASES = {
     }
 }
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+# Override with Render / production database if DATABASE_URL is provided
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if DATABASE_URL:
-    DATABASES['default'] = dj_database_url.config(default=DATABASE_URL, conn_max_age=600)
-
-
+    DATABASES['default'] = dj_database_url.config(
+        default=DATABASE_URL,
+        conn_max_age=600,
+        ssl_require=False  # For Render Free Postgres
+    )
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
