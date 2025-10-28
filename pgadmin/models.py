@@ -10,3 +10,14 @@ class Module(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.user_name})"
+
+from django.db import models
+
+
+class KnowledgeGraph(models.Model):
+    data = models.JSONField(default=dict)  # stores all table-column-desc data in one object
+
+    def __str__(self):
+        return "Knowledge Graph Data"
+
+

@@ -121,3 +121,36 @@ def module_chat_view(request, module_id):
         "tables": tables,
         "user_name": user_name,
     })
+from django.shortcuts import render, redirect
+from django.db import connection
+from .models import KnowledgeGraph
+
+def knowledge_graph_view(request):
+    # fetch or create the single record
+    instance, _ = KnowledgeGraph.objects.get_or_create(id=1)
+    existing_data = instance.data or {}
+
+    tables = connection.introspection.table_names()
+    data = {}
+
+    # collect all table-column data
+    for table in tables:
+        columns = [col.name for col in connection.introspection.get_table_description(connection.cursor(), table)]
+        data[table] = {}
+        for col in columns:
+            data[table][col] = existing_data.get(table, {}).get(col, "")
+
+    if request.method == 'POST':
+        # extract descriptions from form
+        updated_data = {}
+        for key, value in request.POST.items():
+            if key.startswith("desc_"):
+                _, table, column = key.split("__")
+                if table not in updated_data:
+                    updated_data[table] = {}
+                updated_data[table][column] = value
+        instance.data = updated_data
+        instance.save()
+        return redirect('knowledge_graph')
+
+    return render(request, 'knowledge-graph.html', {'data': data})

@@ -12,4 +12,6 @@ urlpatterns = [
 
     # ---------- CHATBOT PAGE (New) ----------
     path('chat/<int:module_id>/', views.module_chat_view, name='chat_module'),
+
+    path('knowledge-graph/', views.knowledge_graph_view, name='knowledge_graph'),
 ]
