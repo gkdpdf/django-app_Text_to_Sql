@@ -21,3 +21,21 @@ class KnowledgeGraph(models.Model):
         return "Knowledge Graph Data"
 
 
+class Metrics(models.Model):
+    data = models.JSONField(default=dict)  # stores all table-column-desc data in one object
+
+    def __str__(self):
+        return "Metrics Data"
+
+
+class RCA(models.Model):
+    data = models.JSONField(default=dict)  # stores all table-column-desc data in one object
+
+    def __str__(self):
+        return "RCA Data"
+
+class Extra_suggestion(models.Model):
+    data = models.JSONField(default=dict)  # stores all table-column-desc data in one object
+
+    def __str__(self):
+        return "Extra Suggestion Data"

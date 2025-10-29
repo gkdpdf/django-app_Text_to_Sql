@@ -14,4 +14,6 @@ urlpatterns = [
     path('chat/<int:module_id>/', views.module_chat_view, name='chat_module'),
 
     path('knowledge-graph/', views.knowledge_graph_view, name='knowledge_graph'),
+    path("upload-knowledge-graph/", views.upload_knowledge_graph, name="upload_knowledge_graph"),
+    path("download-knowledge-graph/", views.download_knowledge_graph_csv, name="download_knowledge_graph"),
 ]

@@ -1,107 +1,162 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Knowledge Graph Editor</title>
-    <style>
-        body {
-            font-family: 'Poppins', sans-serif;
-            background: linear-gradient(135deg, #e6f0ff, #f9fcff);
-            margin: 0;
-            padding: 30px;
-        }
-        h1 {
-            text-align: center;
-            color: #003366;
-        }
-        form {
-            background: white;
-            padding: 25px;
-            border-radius: 20px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            max-width: 1000px;
-            margin: auto;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 40px;
-        }
-        th, td {
-            padding: 10px 14px;
-            border-bottom: 1px solid #ccc;
-            vertical-align: top;
-        }
-        th {
-            text-align: left;
-            color: #003366;
-            font-size: 18px;
-        }
-        td input {
-            width: 100%;
-            padding: 6px;
-            border-radius: 6px;
-            border: 1px solid #ccc;
-        }
-        button {
-            display: block;
-            width: 100%;
-            padding: 12px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        button:hover {
-            background: #0056b3;
-        }
-        .table-box {
-            margin-bottom: 30px;
-            border: 1px solid #ddd;
-            border-radius: 12px;
-            overflow: hidden;
-        }
-        .table-header {
-            background: #007bff;
-            color: white;
-            padding: 10px 15px;
-            font-weight: bold;
-            font-size: 18px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Knowledge Graph Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <h1>🧠 Knowledge Graph Data Editor</h1>
-    <form method="POST">
-        {% csrf_token %}
+
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen font-sans">
+  <div class="max-w-7xl mx-auto p-6">
+    <h1 class="text-3xl font-bold text-center mb-8 text-indigo-700">
+      Knowledge Graph Dashboard
+    </h1>
+
+    <!-- CSV Actions -->
+    <div class="flex justify-between items-center mb-6">
+      <div class="flex gap-4">
+        <a href="{% url 'download_knowledge_graph' %}" 
+           class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition">
+          ⬇️ Download Knowledge Graph (CSV)
+        </a>
+
+        <form action="{% url 'upload_knowledge_graph' %}" method="POST" enctype="multipart/form-data" class="flex items-center gap-2">
+          {% csrf_token %}
+          <input type="file" name="csv_file" accept=".csv"
+                 class="border border-gray-300 rounded-md p-1 bg-white text-sm" required />
+          <button type="submit"
+                  class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition">
+            ⬆️ Upload CSV
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Main Form -->
+    <form method="POST" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {% csrf_token %}
+
+      <!-- LEFT: Knowledge Graph -->
+      <div>
+        <h2 class="text-2xl font-semibold text-indigo-600 mb-4">Knowledge Graph</h2>
 
         {% for table, columns in data.items %}
-        <div class="table-box">
-            <div class="table-header">{{ table }}</div>
-            <table>
-                <tr>
-                    <th>Column Name</th>
-                    <th>Description</th>
+          <div class="mb-8">
+            <h3 class="font-semibold text-lg text-gray-800 mb-2 bg-indigo-50 px-2 py-1 rounded">
+              {{ table }}
+            </h3>
+            <table class="w-full border-collapse border border-gray-300 text-sm">
+              <thead>
+                <tr class="bg-indigo-100 text-left">
+                  <th class="p-2 border">Column</th>
+                  <th class="p-2 border">Description</th>
+                  <th class="p-2 border">Data Type</th>
                 </tr>
-                {% for column, desc in columns.items %}
-                <tr>
-                    <td>{{ column }}</td>
-                    <td>
-                        <input type="text"
-                               name="desc__{{ table }}__{{ column }}"
-                               value="{{ desc }}"
-                               placeholder="Enter description for {{ column }}">
-                    </td>
+              </thead>
+              <tbody>
+                {% for column, info in columns.items %}
+                <tr class="hover:bg-gray-50">
+                  <td class="p-2 border">{{ column }}</td>
+                  <td class="p-2 border">
+                    <input
+                      type="text"
+                      name="desc__{{ table }}__{{ column }}"
+                      value="{{ info.desc }}"
+                      class="w-full p-1 border rounded-md"
+                    />
+                  </td>
+                  <td class="p-2 border">
+                    <select
+                      name="datatype__{{ table }}__{{ column }}"
+                      class="w-full p-1 border rounded-md bg-white"
+                    >
+                      <option value="">Select</option>
+                      <option value="integer" {% if info.datatype == "integer" %}selected{% endif %}>Integer</option>
+                      <option value="decimal" {% if info.datatype == "decimal" %}selected{% endif %}>Decimal</option>
+                      <option value="text" {% if info.datatype == "text" %}selected{% endif %}>Text</option>
+                      <option value="datetime" {% if info.datatype == "datetime" %}selected{% endif %}>Datetime</option>
+                      <option value="date" {% if info.datatype == "date" %}selected{% endif %}>Date</option>
+                      <option value="time" {% if info.datatype == "time" %}selected{% endif %}>Time</option>
+                      <option value="boolean" {% if info.datatype == "boolean" %}selected{% endif %}>Boolean</option>
+                    </select>
+                  </td>
                 </tr>
                 {% endfor %}
+              </tbody>
             </table>
-        </div>
+          </div>
+        {% empty %}
+          <p class="text-gray-600 italic">No tables found starting with <strong>tbl_</strong>.</p>
         {% endfor %}
+      </div>
 
-        <button type="submit">💾 Save All Changes</button>
+      <!-- RIGHT: Metrics, RCA, Extra -->
+      <div class="flex flex-col gap-8">
+        <!-- Metrics -->
+        <div class="bg-white shadow-md rounded-2xl p-6 border border-gray-200">
+          <h2 class="text-2xl font-semibold text-indigo-600 mb-4">Metrics (KPIs)</h2>
+          <div id="metrics-section">
+            {% for name, desc in metrics_data.items %}
+            <div class="flex gap-4 mb-3">
+              <input
+                type="text"
+                name="kpi_name"
+                value="{{ name }}"
+                placeholder="KPI Name"
+                class="flex-1 p-2 border rounded-md"
+              />
+              <input
+                type="text"
+                name="kpi_desc"
+                value="{{ desc }}"
+                placeholder="KPI Description"
+                class="flex-1 p-2 border rounded-md"
+              />
+            </div>
+            {% endfor %}
+            <div class="flex gap-4 mb-3">
+              <input type="text" name="kpi_name" placeholder="KPI Name" class="flex-1 p-2 border rounded-md" />
+              <input type="text" name="kpi_desc" placeholder="KPI Description" class="flex-1 p-2 border rounded-md" />
+            </div>
+          </div>
+        </div>
+
+        <!-- RCA -->
+        <div class="bg-white shadow-md rounded-2xl p-6 border border-gray-200">
+          <h2 class="text-2xl font-semibold text-indigo-600 mb-4">RCA (Root Cause Analysis)</h2>
+          <textarea
+            name="rca_text"
+            rows="5"
+            class="w-full p-3 border rounded-lg"
+            placeholder="Enter your RCA text here..."
+          >{{ rca_text }}</textarea>
+        </div>
+
+        <!-- Extra Suggestion -->
+        <div class="bg-white shadow-md rounded-2xl p-6 border border-gray-200">
+          <h2 class="text-2xl font-semibold text-indigo-600 mb-4">Extra Suggestions</h2>
+          <textarea
+            name="extra_text"
+            rows="5"
+            class="w-full p-3 border rounded-lg"
+            placeholder="Enter extra suggestions here..."
+          >{{ extra_text }}</textarea>
+        </div>
+
+        <!-- ONE FINAL SAVE BUTTON -->
+        <div class="text-center mt-4">
+          <button
+            type="submit"
+            name="save_all"
+            class="bg-indigo-700 text-white px-10 py-3 rounded-xl hover:bg-indigo-800 transition text-lg font-semibold shadow-md"
+          >
+            💾 Save All Changes
+          </button>
+        </div>
+      </div>
     </form>
+  </div>
 </body>
 </html>

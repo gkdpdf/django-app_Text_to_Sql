@@ -121,36 +121,185 @@ def module_chat_view(request, module_id):
         "tables": tables,
         "user_name": user_name,
     })
+
 from django.shortcuts import render, redirect
 from django.db import connection
-from .models import KnowledgeGraph
+from django.http import HttpResponse
+from .models import KnowledgeGraph, Metrics, RCA, Extra_suggestion
+import csv
+import io
+import json
+
 
 def knowledge_graph_view(request):
-    # fetch or create the single record
-    instance, _ = KnowledgeGraph.objects.get_or_create(id=1)
-    existing_data = instance.data or {}
+    kg_instance, _ = KnowledgeGraph.objects.get_or_create(id=1)
+    metrics_instance, _ = Metrics.objects.get_or_create(id=1)
+    rca_instance, _ = RCA.objects.get_or_create(id=1)
+    extra_instance, _ = Extra_suggestion.objects.get_or_create(id=1)
 
-    tables = connection.introspection.table_names()
-    data = {}
+    try:
+        existing_kg_data = json.loads(kg_instance.data) if isinstance(kg_instance.data, str) else kg_instance.data or {}
+    except:
+        existing_kg_data = {}
 
-    # collect all table-column data
+    try:
+        existing_metrics_data = json.loads(metrics_instance.data) if isinstance(metrics_instance.data, str) else metrics_instance.data or {}
+    except:
+        existing_metrics_data = {}
+
+    existing_rca_data = ""
+    if rca_instance.data:
+        if isinstance(rca_instance.data, dict):
+            existing_rca_data = rca_instance.data.get("text", "")
+        else:
+            try:
+                existing_rca_data = json.loads(rca_instance.data).get("text", "")
+            except:
+                existing_rca_data = ""
+
+    existing_extra_data = ""
+    if extra_instance.data:
+        if isinstance(extra_instance.data, dict):
+            existing_extra_data = extra_instance.data.get("text", "")
+        else:
+            try:
+                existing_extra_data = json.loads(extra_instance.data).get("text", "")
+            except:
+                existing_extra_data = ""
+
+    # Get tables starting with tbl_
+    tables = [t for t in connection.introspection.table_names() if t.startswith("tbl_")]
+    knowledge_data = {}
+
     for table in tables:
         columns = [col.name for col in connection.introspection.get_table_description(connection.cursor(), table)]
-        data[table] = {}
+        knowledge_data[table] = {}
         for col in columns:
-            data[table][col] = existing_data.get(table, {}).get(col, "")
+            existing_info = existing_kg_data.get(table, {}).get(col, {})
+            knowledge_data[table][col] = {
+                "desc": existing_info.get("desc", ""),
+                "datatype": existing_info.get("datatype", "")
+            }
 
-    if request.method == 'POST':
-        # extract descriptions from form
-        updated_data = {}
+    # Handle CSV upload
+    if request.method == "POST" and "upload_csv" in request.FILES:
+        csv_file = request.FILES["upload_csv"]
+        decoded_file = csv_file.read().decode("utf-8")
+        io_string = io.StringIO(decoded_file)
+        reader = csv.DictReader(io_string)
+        uploaded_data = {}
+
+        for row in reader:
+            table = row["table"]
+            column = row["column"]
+            desc = row.get("desc", "")
+            datatype = row.get("datatype", "")
+            uploaded_data.setdefault(table, {}).setdefault(column, {})["desc"] = desc
+            uploaded_data.setdefault(table, {}).setdefault(column, {})["datatype"] = datatype
+
+        kg_instance.data = uploaded_data
+        kg_instance.save()
+        return redirect("knowledge_graph")
+
+    # Handle Save All
+    if request.method == "POST" and "save_all" in request.POST:
+        updated_kg_data = {}
         for key, value in request.POST.items():
-            if key.startswith("desc_"):
+            if key.startswith("desc__"):
                 _, table, column = key.split("__")
-                if table not in updated_data:
-                    updated_data[table] = {}
-                updated_data[table][column] = value
-        instance.data = updated_data
-        instance.save()
-        return redirect('knowledge_graph')
+                updated_kg_data.setdefault(table, {}).setdefault(column, {})["desc"] = value
+            elif key.startswith("datatype__"):
+                _, table, column = key.split("__")
+                updated_kg_data.setdefault(table, {}).setdefault(column, {})["datatype"] = value
 
-    return render(request, 'knowledge-graph.html', {'data': data})
+        kg_instance.data = updated_kg_data
+        kg_instance.save()
+
+        updated_metrics_data = {}
+        names = request.POST.getlist("kpi_name")
+        descs = request.POST.getlist("kpi_desc")
+        for i in range(len(names)):
+            if names[i].strip():
+                updated_metrics_data[names[i].strip()] = descs[i].strip()
+        metrics_instance.data = updated_metrics_data
+        metrics_instance.save()
+
+        rca_instance.data = {"text": request.POST.get("rca_text", "").strip()}
+        rca_instance.save()
+
+        extra_instance.data = {"text": request.POST.get("extra_text", "").strip()}
+        extra_instance.save()
+
+        return redirect("knowledge_graph")
+
+    return render(request, "knowledge-graph.html", {
+        "data": knowledge_data,
+        "metrics_data": existing_metrics_data,
+        "rca_text": existing_rca_data,
+        "extra_text": existing_extra_data
+    })
+
+
+from django.http import HttpResponse
+import csv
+import json
+
+def download_knowledge_graph_csv(request):
+    kg_instance = KnowledgeGraph.objects.first()
+
+    # Safely parse stored JSON data
+    try:
+        data = json.loads(kg_instance.data) if isinstance(kg_instance.data, str) else kg_instance.data or {}
+    except:
+        data = {}
+
+    # Create CSV response
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="knowledge_graph.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(["table", "column", "desc", "datatype"])  # CSV headers
+
+    for table, columns in data.items():
+        for column, info in columns.items():
+            writer.writerow([
+                table,
+                column,
+                info.get("desc", ""),
+                info.get("datatype", "")
+            ])
+
+    return response
+
+import csv
+from django.http import HttpResponse
+import json
+
+def upload_knowledge_graph(request):
+    if request.method == 'POST' and request.FILES.get('csv_file'):
+        csv_file = request.FILES['csv_file']
+        decoded_file = csv_file.read().decode('utf-8').splitlines()
+        reader = csv.DictReader(decoded_file)
+
+        kg_instance, _ = KnowledgeGraph.objects.get_or_create(id=1)
+        data = {}
+
+        for row in reader:
+            table = row.get('table', '').strip()
+            column = row.get('column', '').strip()
+            desc = row.get('desc', '').strip()
+            datatype = row.get('datatype', '').strip()
+
+            if table and column:
+                data.setdefault(table, {})[column] = {
+                    'desc': desc,
+                    'datatype': datatype
+                }
+
+        kg_instance.data = data
+        kg_instance.save()
+
+        return redirect('knowledge_graph')
+    return redirect('knowledge_graph')
+
+
