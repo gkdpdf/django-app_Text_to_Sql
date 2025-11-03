@@ -429,67 +429,97 @@
     }
 
     function sendMessage() {
-      const text = userInput.value.trim();
-      if (!text) return;
+  const text = userInput.value.trim();
+  if (!text) return;
 
-      messageCount++;
-      
-      // Clear initial state if this is the first message
-      if (messageCount === 1) {
-        chatBox.innerHTML = '';
-      }
+  messageCount++;
+  
+  // Clear initial state if this is the first message
+  if (messageCount === 1) {
+    chatBox.innerHTML = '';
+  }
 
-      // Add user message
-      chatBox.innerHTML += `
-        <div class="message-appear flex justify-end mb-4">
-          <div class="flex items-end gap-3 max-w-[70%]">
-            <div class="text-right">
-              <div class="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-4 py-3 rounded-2xl rounded-br-none shadow-lg">
-                ${text}
-              </div>
-              <div class="text-xs text-gray-400 mt-1">${formatTime()}</div>
+  // Add user message
+  chatBox.innerHTML += `
+    <div class="message-appear flex justify-end mb-4">
+      <div class="flex items-end gap-3 max-w-[70%]">
+        <div class="text-right">
+          <div class="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-4 py-3 rounded-2xl rounded-br-none shadow-lg">
+            ${text}
+          </div>
+          <div class="text-xs text-gray-400 mt-1">${formatTime()}</div>
+        </div>
+        <img src="${userAvatar}" class="w-8 h-8 rounded-full shadow-md" alt="User">
+      </div>
+    </div>
+  `;
+  
+  userInput.value = '';
+  chatBox.scrollTop = chatBox.scrollHeight;
+
+  // Show typing indicator
+  typingIndicator.classList.remove('hidden');
+
+  // UPDATE THIS LINE - Change /chat/ to /api/chat/
+  fetch('/api/chat/', {  // <-- CHANGED HERE
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCookie('csrftoken')
+    },
+    body: JSON.stringify({
+      message: text,
+      session_id: 'session_' + Date.now()
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    typingIndicator.classList.add('hidden');
+    
+    // Format the response
+    let responseText = data.response || 'No response received';
+    
+    // Handle newlines and SQL code formatting
+    responseText = responseText
+      .replace(/\n/g, '<br>')
+      .replace(/```sql(.*?)```/gs, '<pre class="bg-gray-100 p-2 rounded text-sm">$1</pre>')
+      .replace(/```(.*?)```/gs, '<pre class="bg-gray-100 p-2 rounded text-sm">$1</pre>');
+    
+    chatBox.innerHTML += `
+      <div class="message-appear flex mb-4">
+        <div class="flex items-end gap-3 max-w-[70%]">
+          <img src="${aiAvatar}" class="w-8 h-8 rounded-full shadow-md" alt="AI">
+          <div>
+            <div class="bg-white text-gray-800 px-4 py-3 rounded-2xl rounded-bl-none shadow-lg border border-gray-100">
+              ${responseText}
             </div>
-            <img src="${userAvatar}" class="w-8 h-8 rounded-full shadow-md" alt="User">
+            <div class="text-xs text-gray-400 mt-1">${formatTime()}</div>
           </div>
         </div>
-      `;
-      
-      userInput.value = '';
-      chatBox.scrollTop = chatBox.scrollHeight;
-
-      // Show typing indicator
-      typingIndicator.classList.remove('hidden');
-
-      // Simulate AI response
-      setTimeout(() => {
-        typingIndicator.classList.add('hidden');
-        
-        const responses = [
-          "I'm analyzing your data sources to provide the best insights.",
-          "That's an interesting question! Let me process that information.",
-          "Based on the available data, I can help you with that.",
-          "I'm here to assist you with any queries about your data.",
-          "Let me search through the connected tables for relevant information."
-        ];
-        
-        const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-        
-        chatBox.innerHTML += `
-          <div class="message-appear flex mb-4">
-            <div class="flex items-end gap-3 max-w-[70%]">
-              <img src="${aiAvatar}" class="w-8 h-8 rounded-full shadow-md" alt="AI">
-              <div>
-                <div class="bg-white text-gray-800 px-4 py-3 rounded-2xl rounded-bl-none shadow-lg border border-gray-100">
-                  ${randomResponse}
-                </div>
-                <div class="text-xs text-gray-400 mt-1">${formatTime()}</div>
-              </div>
+      </div>
+    `;
+    chatBox.scrollTop = chatBox.scrollHeight;
+  })
+  .catch(error => {
+    typingIndicator.classList.add('hidden');
+    console.error('Error:', error);
+    
+    // Show error message
+    chatBox.innerHTML += `
+      <div class="message-appear flex mb-4">
+        <div class="flex items-end gap-3 max-w-[70%]">
+          <img src="${aiAvatar}" class="w-8 h-8 rounded-full shadow-md" alt="AI">
+          <div>
+            <div class="bg-red-50 text-red-600 px-4 py-3 rounded-2xl rounded-bl-none shadow-lg border border-red-200">
+              Error: ${error.message}
             </div>
+            <div class="text-xs text-gray-400 mt-1">${formatTime()}</div>
           </div>
-        `;
-        chatBox.scrollTop = chatBox.scrollHeight;
-      }, 1500);
-    }
+        </div>
+      </div>
+    `;
+  });
+}
 
     sendBtn.addEventListener('click', sendMessage);
     userInput.addEventListener('keypress', (e) => {

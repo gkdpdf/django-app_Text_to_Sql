@@ -60,8 +60,6 @@ def new_module_view(request):
     return render(request, "new_module.html", {"tables": tables, "user_name": user_name})
 
 
-# ---------- UPLOAD FILES (EDIT MODULE) ----------
-# ---------- UPLOAD FILES & RESELECT TABLES (EDIT MODULE) ----------
 def edit_module_view(request, module_id):
     user_name = request.session.get("user_name")
     if not user_name:
@@ -108,19 +106,78 @@ def edit_module_view(request, module_id):
 
 
 # ---------- CHATBOT VIEW ----------
-def module_chat_view(request, module_id):
-    user_name = request.session.get("user_name")
-    if not user_name:
-        return redirect("login")
 
-    module = get_object_or_404(Module, id=module_id, user_name=user_name)
-    tables = module.tables
+# Import your main.py service
+# from RAG_LLM.main import text_to_sql_service
+# from django.views.decorators.csrf import csrf_exempt
+# from django.shortcuts import render
+# from django.http import JsonResponse
+# from django.views.decorators.csrf import csrf_exempt
+# import json
+# import sys
+# from pathlib import Path
 
-    return render(request, "module_chat.html", {
-        "module_name": module.name,
-        "tables": tables,
-        "user_name": user_name,
-    })
+# # Add the RAG_LLM directory to Python path
+# sys.path.append(str(Path(__file__).resolve().parent.parent))
+
+# try:
+#     from RAG_LLM.main import text_to_sql_service
+# except Exception as e:
+#     print(f"Error importing text_to_sql_service: {e}")
+#     text_to_sql_service = None
+
+# def module_chat_view(request, module_id):
+#     """Your existing view"""
+#     if text_to_sql_service:
+#         tables = list(text_to_sql_service.table_columns.keys())
+#     else:
+#         tables = []
+    
+#     context = {
+#         'module_name': 'Text to SQL Assistant',
+#         'module_id': module_id,
+#         'tables': tables
+#     }
+#     return render(request, 'module_chat.html', context)
+
+# @csrf_exempt
+# def chat_api(request):
+#     """Handle chat API requests"""
+#     print(f"Chat API called with method: {request.method}")
+    
+#     if request.method == 'POST':
+#         try:
+#             # Check if service is initialized
+#             if not text_to_sql_service:
+#                 return JsonResponse({
+#                     'response': 'Text-to-SQL service is not initialized. Please check server logs.'
+#                 }, status=500)
+            
+#             data = json.loads(request.body)
+#             message = data.get('message', '')
+#             session_id = data.get('session_id', 'default')
+            
+#             print(f"Received message: {message}")
+#             print(f"Session ID: {session_id}")
+            
+#             # Process with your Text-to-SQL service
+#             response = text_to_sql_service.process(message, session_id)
+            
+#             print(f"Sending response: {response}")
+            
+#             return JsonResponse({'response': response})
+            
+#         except json.JSONDecodeError as e:
+#             print(f"JSON decode error: {e}")
+#             return JsonResponse({'response': f'Invalid JSON: {str(e)}'}, status=400)
+#         except Exception as e:
+#             print(f"Error in chat_api: {e}")
+#             import traceback
+#             traceback.print_exc()
+#             return JsonResponse({'response': f'Server error: {str(e)}'}, status=500)
+    
+#     return JsonResponse({'response': 'Method not allowed'}, status=405)
+
 
 from django.shortcuts import render, redirect
 from django.db import connection
@@ -303,3 +360,115 @@ def upload_knowledge_graph(request):
     return redirect('knowledge_graph')
 
 
+
+
+
+# views.py
+from django.shortcuts import render
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+import json
+import logging
+
+from .RAG_LLM.main import invoke_graph
+
+logger = logging.getLogger(__name__)
+
+SESSION_STORE = {}
+
+def chat_view(request):
+    return render(request, "chat.html")
+
+@csrf_exempt
+def chat_api(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    
+    user_query = data.get("message", "").strip()
+    feedback = data.get("feedback", None)
+    
+    if not user_query and not feedback:
+        return JsonResponse({"error": "Empty message"}, status=400)
+    
+    if not request.session.session_key:
+        request.session.create()
+    session_id = request.session.session_key
+    
+    if session_id not in SESSION_STORE:
+        SESSION_STORE[session_id] = {
+            "entities": {},
+            "history": [],
+            "thread_id": f"user_{session_id}",
+            "last_query": None,
+            "pending_clarification": None
+        }
+    
+    session_data = SESSION_STORE[session_id]
+    
+    try:
+        if feedback:
+            entity_type = feedback.get("entity_type")
+            feedback_type = feedback.get("type")
+            
+            # CRITICAL: Add clarification context from pending clarification
+            if session_data.get("pending_clarification"):
+                feedback["clarification_context"] = {
+                    "table": session_data["pending_clarification"].get("table"),
+                    "column": session_data["pending_clarification"].get("column")
+                }
+            
+            # Store selected entity in simplified format for display
+            if feedback_type == "value_selection":
+                selected_value = feedback.get("selected_option")
+                if entity_type and selected_value:
+                    session_data["entities"][entity_type] = selected_value
+            
+            elif feedback_type == "custom_input":
+                custom_value = feedback.get("custom_value")
+                if entity_type and custom_value:
+                    session_data["entities"][entity_type] = custom_value
+            
+            original_query = session_data.get("last_query", "")
+            result = invoke_graph(original_query, session_data, human_feedback=feedback)
+            
+            session_data["pending_clarification"] = None
+            
+        else:
+            # New query
+            session_data["last_query"] = user_query
+            result = invoke_graph(user_query, session_data)
+            
+            # Store pending clarification with full context
+            if result.get("type") == "clarification":
+                session_data["pending_clarification"] = {
+                    "entity_type": result.get("entity_type"),
+                    "table": result.get("table"),
+                    "column": result.get("column"),
+                    "entity": result.get("entity")
+                }
+            
+            if result.get("type") != "clarification":
+                session_data["history"].append(user_query)
+        
+        # Update session entities (simplified for display)
+        if result.get("entities"):
+            for e_type, e_data in result["entities"].items():
+                if isinstance(e_data, dict):
+                    # Extract just the value for display
+                    session_data["entities"][e_type] = e_data.get("value", e_data)
+                else:
+                    session_data["entities"][e_type] = e_data
+        
+        return JsonResponse(result)
+        
+    except Exception as e:
+        logger.error(f"Error in chat_api: {str(e)}", exc_info=True)
+        return JsonResponse({
+            "type": "error",
+            "message": "I encountered an error processing your request. Please try again."
+        }, status=500)
