@@ -83,6 +83,9 @@ class GraphState(TypedDict, total=False):
     error: Optional[str]
     chart_data: Optional[Dict[str, Any]]
     sql_result: Optional[str]
+    validated_sql: Optional[str]
+    execution_result: Optional[List[Dict[str, Any]]]
+    execution_status: Optional[str]
 
 # ==================== ENTITY RESOLVER WITH PROPER FORMATTING ====================
 def entity_resolver_with_memory(state: GraphState):
@@ -99,7 +102,7 @@ def entity_resolver_with_memory(state: GraphState):
     table_columns = state.get("table_columns", {})
     query_history = state.get("query_history", [])
 
-    resolved = {"entities": {}, "filters": {}}
+    resolved = {"entities": {}, "filters": {}, "table": "tbl_primary"}
     clarification_needed = None
 
     logger.info(f"\n{'='*70}")
@@ -159,7 +162,6 @@ def entity_resolver_with_memory(state: GraphState):
             selected_value = human_feedback.get("selected_option")
             if entity_type and selected_value:
                 # CRITICAL: Store with table/column info if available from clarification context
-                # Get the table/column from the original clarification
                 if "clarification_context" in human_feedback:
                     table = human_feedback["clarification_context"].get("table")
                     column = human_feedback["clarification_context"].get("column")
@@ -415,6 +417,9 @@ def invoke_graph(user_query: str, session_data: dict, human_feedback: dict = Non
         logger.info(f"Invoking graph for thread: {thread_id}")
         result = graph.invoke(payload, config={"thread_id": thread_id})
         
+        logger.info(f"🔍 DEBUG - Graph result keys: {result.keys()}")
+        logger.info(f"🔍 DEBUG - Has chart_data: {bool(result.get('chart_data'))}")
+        
         # ===== HANDLE CLARIFICATION =====
         if result.get("clarification_needed"):
             clarification = result["clarification_needed"]
@@ -456,8 +461,11 @@ def invoke_graph(user_query: str, session_data: dict, human_feedback: dict = Non
             "entities": result.get("session_entities", {}),
         }
         
+        # CRITICAL FIX: Use chart_data (not chart)
         if result.get("chart_data"):
-            response["chart"] = result["chart_data"]
+            response["chart_data"] = result["chart_data"]
+            logger.info(f"✅ Chart data included in response")
+            logger.info(f"📊 Chart info: {result['chart_data'].get('chart_info', {})}")
         
         logger.info(f"✅ Response ready: {response['type']}")
         return response

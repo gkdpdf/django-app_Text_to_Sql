@@ -59,3 +59,52 @@ class ChatMessage(models.Model):
 
     def __str__(self):
         return f"{self.role}: {self.content[:30]}"
+
+
+from django.db import models
+from django.contrib.auth.models import User
+import json
+
+class Conversation(models.Model):
+    """Represents a chat conversation"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    session_id = models.CharField(max_length=255, db_index=True)
+    title = models.CharField(max_length=255, default="New Chat")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    # Store entities and context as JSON
+    entities = models.JSONField(default=dict, blank=True)
+    context = models.JSONField(default=dict, blank=True)
+    
+    class Meta:
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['session_id', '-updated_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.title} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
+    
+    def get_first_message(self):
+        """Get first user message for title generation"""
+        first_msg = self.messages.filter(is_user=True).first()
+        return first_msg.content if first_msg else "New Chat"
+
+
+class Message(models.Model):
+    """Represents a single message in a conversation"""
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
+    content = models.TextField()
+    is_user = models.BooleanField(default=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    # Store message metadata
+    metadata = models.JSONField(default=dict, blank=True)  # For clarifications, entities, etc.
+    
+    class Meta:
+        ordering = ['timestamp']
+    
+    def __str__(self):
+        sender = "User" if self.is_user else "AI"
+        return f"{sender}: {self.content[:50]}..."

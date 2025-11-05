@@ -22,5 +22,8 @@ urlpatterns = [
  
     path("chat/", views.chat_view, name="chat_view"),
     path("api/chat/", views.chat_api, name="chat_api"),
+    path("api/conversations/", views.get_conversations, name="get_conversations"),
+    path("api/conversations/<int:conversation_id>/", views.load_conversation, name="load_conversation"),
+    path("api/conversations/<int:conversation_id>/delete/", views.delete_conversation, name="delete_conversation"),
 
 ]

@@ -367,20 +367,28 @@ def upload_knowledge_graph(request):
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.db.models import Q
 import json
 import logging
+from datetime import datetime
 
 from .RAG_LLM.main import invoke_graph
+from .models import Conversation, Message
 
 logger = logging.getLogger(__name__)
 
 SESSION_STORE = {}
 
 def chat_view(request):
+    """Render the chat interface"""
     return render(request, "chat.html")
+
 
 @csrf_exempt
 def chat_api(request):
+    """
+    Handle chat messages with conversation persistence and chart support
+    """
     if request.method != "POST":
         return JsonResponse({"error": "Method not allowed"}, status=405)
     
@@ -391,38 +399,50 @@ def chat_api(request):
     
     user_query = data.get("message", "").strip()
     feedback = data.get("feedback", None)
+    conversation_id = data.get("conversation_id", None)
     
     if not user_query and not feedback:
         return JsonResponse({"error": "Empty message"}, status=400)
     
+    # Get or create session
     if not request.session.session_key:
         request.session.create()
     session_id = request.session.session_key
     
-    if session_id not in SESSION_STORE:
-        SESSION_STORE[session_id] = {
-            "entities": {},
-            "history": [],
-            "thread_id": f"user_{session_id}",
+    # Get or create conversation
+    if conversation_id:
+        try:
+            conversation = Conversation.objects.get(id=conversation_id, session_id=session_id)
+        except Conversation.DoesNotExist:
+            conversation = Conversation.objects.create(session_id=session_id)
+    else:
+        conversation = Conversation.objects.create(session_id=session_id)
+    
+    # Initialize session data from conversation
+    if conversation.id not in SESSION_STORE:
+        SESSION_STORE[conversation.id] = {
+            "entities": conversation.entities or {},
+            "history": list(conversation.messages.filter(is_user=True).values_list('content', flat=True)),
+            "thread_id": f"conv_{conversation.id}",
             "last_query": None,
-            "pending_clarification": None
+            "pending_clarification": conversation.context.get("pending_clarification") if conversation.context else None,
         }
     
-    session_data = SESSION_STORE[session_id]
+    session_data = SESSION_STORE[conversation.id]
     
     try:
         if feedback:
             entity_type = feedback.get("entity_type")
             feedback_type = feedback.get("type")
             
-            # CRITICAL: Add clarification context from pending clarification
+            # Add clarification context
             if session_data.get("pending_clarification"):
                 feedback["clarification_context"] = {
                     "table": session_data["pending_clarification"].get("table"),
                     "column": session_data["pending_clarification"].get("column")
                 }
             
-            # Store selected entity in simplified format for display
+            # Store selected entity
             if feedback_type == "value_selection":
                 selected_value = feedback.get("selected_option")
                 if entity_type and selected_value:
@@ -433,17 +453,33 @@ def chat_api(request):
                 if entity_type and custom_value:
                     session_data["entities"][entity_type] = custom_value
             
+            # Save user selection as message
+            if feedback_type in ["value_selection", "custom_input"]:
+                selection_text = feedback.get("selected_option") or feedback.get("custom_value")
+                Message.objects.create(
+                    conversation=conversation,
+                    content=f"Selected: {selection_text}",
+                    is_user=True,
+                    metadata={"type": "selection", "entity_type": entity_type}
+                )
+            
             original_query = session_data.get("last_query", "")
             result = invoke_graph(original_query, session_data, human_feedback=feedback)
             
             session_data["pending_clarification"] = None
             
         else:
-            # New query
+            # Save user message to database
+            user_message = Message.objects.create(
+                conversation=conversation,
+                content=user_query,
+                is_user=True
+            )
+            
             session_data["last_query"] = user_query
             result = invoke_graph(user_query, session_data)
             
-            # Store pending clarification with full context
+            # Store pending clarification
             if result.get("type") == "clarification":
                 session_data["pending_clarification"] = {
                     "entity_type": result.get("entity_type"),
@@ -455,6 +491,21 @@ def chat_api(request):
             if result.get("type") != "clarification":
                 session_data["history"].append(user_query)
         
+        # Save AI response to database (if not clarification)
+        if result.get("type") == "response":
+            # Extract chart data if present
+            chart_data = result.get("chart_data")
+            
+            Message.objects.create(
+                conversation=conversation,
+                content=result.get("message", ""),
+                is_user=False,
+                metadata={
+                    "entities": result.get("entities", {}),
+                    "chart": chart_data  # Store full chart data including plotly JSON
+                }
+            )
+        
         # Update session entities (simplified for display)
         if result.get("entities"):
             for e_type, e_data in result["entities"].items():
@@ -464,6 +515,23 @@ def chat_api(request):
                 else:
                     session_data["entities"][e_type] = e_data
         
+        # Save to database
+        conversation.entities = session_data["entities"]
+        conversation.context = {
+            "pending_clarification": session_data.get("pending_clarification"),
+            "last_query": session_data.get("last_query")
+        }
+        
+        # Auto-generate title from first message
+        if conversation.title == "New Chat" and conversation.messages.filter(is_user=True).count() > 0:
+            first_message = conversation.get_first_message()
+            conversation.title = first_message[:50] + ("..." if len(first_message) > 50 else "")
+        
+        conversation.save()
+        
+        # Add conversation_id to response
+        result["conversation_id"] = conversation.id
+        
         return JsonResponse(result)
         
     except Exception as e:
@@ -472,3 +540,85 @@ def chat_api(request):
             "type": "error",
             "message": "I encountered an error processing your request. Please try again."
         }, status=500)
+
+
+@csrf_exempt
+def get_conversations(request):
+    """Get list of conversations for sidebar"""
+    if request.method != "GET":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+    
+    if not request.session.session_key:
+        request.session.create()
+    session_id = request.session.session_key
+    
+    conversations = Conversation.objects.filter(session_id=session_id).order_by('-updated_at')[:50]
+    
+    conv_list = []
+    for conv in conversations:
+        conv_list.append({
+            "id": conv.id,
+            "title": conv.title,
+            "updated_at": conv.updated_at.isoformat(),
+            "message_count": conv.messages.count()
+        })
+    
+    return JsonResponse({"conversations": conv_list})
+
+
+@csrf_exempt
+def load_conversation(request, conversation_id):
+    """Load a specific conversation with all messages"""
+    if request.method != "GET":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+    
+    if not request.session.session_key:
+        request.session.create()
+    session_id = request.session.session_key
+    
+    try:
+        conversation = Conversation.objects.get(id=conversation_id, session_id=session_id)
+    except Conversation.DoesNotExist:
+        return JsonResponse({"error": "Conversation not found"}, status=404)
+    
+    messages = []
+    for msg in conversation.messages.all():
+        messages.append({
+            "content": msg.content,
+            "is_user": msg.is_user,
+            "timestamp": msg.timestamp.isoformat(),
+            "metadata": msg.metadata
+        })
+    
+    return JsonResponse({
+        "conversation": {
+            "id": conversation.id,
+            "title": conversation.title,
+            "entities": conversation.entities,
+            "context": conversation.context
+        },
+        "messages": messages
+    })
+
+
+@csrf_exempt
+def delete_conversation(request, conversation_id):
+    """Delete a conversation"""
+    if request.method != "DELETE":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+    
+    if not request.session.session_key:
+        return JsonResponse({"error": "No session"}, status=400)
+    session_id = request.session.session_key
+    
+    try:
+        conversation = Conversation.objects.get(id=conversation_id, session_id=session_id)
+        conversation.delete()
+        
+        # Clear from session store
+        if conversation_id in SESSION_STORE:
+            del SESSION_STORE[conversation_id]
+        
+        return JsonResponse({"success": True})
+    except Conversation.DoesNotExist:
+        return JsonResponse({"error": "Conversation not found"}, status=404)
