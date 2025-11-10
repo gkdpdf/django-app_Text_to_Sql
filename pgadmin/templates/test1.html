@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LangGraph Chatbot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex h-screen">
+  <!-- Sidebar -->
+  <div class="w-64 bg-gray-900 text-white flex flex-col">
+    <div class="p-4 text-lg font-bold border-b border-gray-700">💬 Chats</div>
+    <a href="/" class="m-3 bg-indigo-600 text-center py-2 rounded-lg hover:bg-indigo-700">+ New Chat</a>
+
+    <div class="flex-1 overflow-y-auto">
+      {% for id, chat in chats.items %}
+        <a href="/{{ id }}/" class="block px-4 py-2 hover:bg-gray-700 {% if id == current_chat_id %}bg-gray-800{% endif %}">
+          {{ chat.title }}
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Main Chat Area -->
+  <div class="flex-1 flex flex-col">
+    <div class="p-4 bg-indigo-600 text-white font-semibold">LangGraph Chatbot 🤖</div>
+
+    <div id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+      {% for msg in current_chat.messages %}
+        {% if msg.role == "user" %}
+          <div class="flex justify-end">
+            <div class="bg-indigo-100 text-indigo-900 p-2 px-4 rounded-xl max-w-[70%]">
+              {{ msg.content }}
+            </div>
+          </div>
+        {% else %}
+          <div class="flex justify-start">
+            <div class="bg-gray-200 text-gray-800 p-2 px-4 rounded-xl max-w-[70%]">
+              {{ msg.content }}
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    <form method="POST" class="p-4 border-t flex gap-2 bg-white">
+      {% csrf_token %}
+      <input name="user_input" type="text" placeholder="Type your message..."
+             class="flex-1 p-2 border rounded-lg focus:outline-none focus:ring focus:ring-indigo-300" required>
+      <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
+        Send
+      </button>
+    </form>
+  </div>
+</body>
+</html>

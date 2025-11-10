@@ -1,60 +1,688 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit Module - PostgreSQL Viewer</title>
+    <title>Edit Module - {{ module.name }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Animations */
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+
+        @keyframes slideInUp {
+            from {
+                transform: translateY(30px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(102, 126, 234, 0.5); }
+            50% { box-shadow: 0 0 30px rgba(102, 126, 234, 0.8); }
+        }
+
         body {
-            font-family: 'Poppins', sans-serif;
-            background: linear-gradient(135deg, #d3e9ff, #f0f9ff);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Animated gradient background */
+        .animated-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #f5576c);
+            background-size: 400% 400%;
+            animation: gradient 15s ease infinite;
+            z-index: -2;
+        }
+
+        /* Floating blur effects */
+        .floating-elements {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: -1;
+        }
+
+        .floating-circle {
+            position: absolute;
+            border-radius: 50%;
+            mix-blend-mode: multiply;
+            filter: blur(40px);
+            opacity: 0.7;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .circle-1 {
+            width: 300px;
+            height: 300px;
+            background: rgba(102, 126, 234, 0.3);
+            top: 10%;
+            left: 10%;
+        }
+
+        .circle-2 {
+            width: 350px;
+            height: 350px;
+            background: rgba(118, 75, 162, 0.3);
+            top: 60%;
+            right: 10%;
+            animation-delay: 2s;
+        }
+
+        .circle-3 {
+            width: 400px;
+            height: 400px;
+            background: rgba(240, 147, 251, 0.3);
+            bottom: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            animation-delay: 4s;
+        }
+
+        /* Container */
+        .container {
+            position: relative;
+            z-index: 1;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .main-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 30px;
+            box-shadow: 0 15px 50px rgba(31, 38, 135, 0.2);
+            padding: 50px;
+            max-width: 900px;
+            width: 100%;
+            animation: slideInUp 0.6s ease-out;
+        }
+
+        /* Header with gradient line */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 2px;
+        }
+
+        .module-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 100vh;
-            margin: 0;
+            margin: 0 auto 20px;
+            font-size: 2em;
+            animation: glow 3s ease-in-out infinite;
         }
-        .container {
-            background: white;
-            padding: 40px 60px;
-            border-radius: 20px;
-            box-shadow: 0 4px 25px rgba(0,0,0,0.1);
-            text-align: center;
+
+        h1 {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 2.5em;
+            font-weight: 700;
+            margin-bottom: 10px;
         }
-        h2 { color: #0078d7; }
-        input[type="file"] {
-            margin: 10px 0;
+
+        .module-subtitle {
+            color: #666;
+            font-size: 1.1em;
         }
-        button {
-            background: #0078d7;
+
+        /* Navigation pills */
+        .nav-pills {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 30px 0;
+        }
+
+        .nav-pill {
+            padding: 10px 25px;
+            background: rgba(102, 126, 234, 0.1);
+            border: 2px solid rgba(102, 126, 234, 0.2);
+            border-radius: 25px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .nav-pill:hover {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: transparent;
             color: white;
-            padding: 10px 30px;
-            border: none;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        /* Form styling */
+        form {
+            display: grid;
+            gap: 30px;
+        }
+
+        .form-section {
+            background: rgba(102, 126, 234, 0.03);
+            border: 2px solid rgba(102, 126, 234, 0.1);
+            border-radius: 20px;
+            padding: 25px;
+            transition: all 0.3s ease;
+        }
+
+        .form-section:hover {
+            border-color: rgba(102, 126, 234, 0.3);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.1);
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+            font-size: 1.2em;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .section-icon {
+            width: 35px;
+            height: 35px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        /* Table selection */
+        .tables-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            max-height: 280px;
+            overflow-y: auto;
+            padding: 15px;
+            background: white;
+            border-radius: 15px;
+            border: 2px solid #e0e0e0;
+        }
+
+        .tables-grid::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .tables-grid::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        .tables-grid::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+        }
+
+        .table-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            background: #f8f9fa;
             border-radius: 10px;
             cursor: pointer;
-            transition: 0.3s;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
         }
-        button:hover { background: #005fa3; }
-        a {
+
+        .table-label:hover {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+            border-color: #667eea;
+            transform: translateX(5px);
+        }
+
+        .table-checkbox {
+            width: 20px;
+            height: 20px;
+            accent-color: #667eea;
+            cursor: pointer;
+        }
+
+        .table-checkbox:checked + .table-name {
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .table-name {
+            flex: 1;
+            font-size: 0.95em;
+            color: #444;
+            transition: all 0.3s ease;
+        }
+
+        /* File upload */
+        .file-upload-wrapper {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .file-upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 30px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.03) 0%, rgba(118, 75, 162, 0.03) 100%);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .file-upload-area:hover {
+            border-color: #764ba2;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+            transform: scale(1.02);
+        }
+
+        .file-icon {
+            font-size: 3em;
+            color: #667eea;
+            margin-bottom: 15px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .file-input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-label {
+            display: block;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .file-button {
             display: inline-block;
+            padding: 10px 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .current-file {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 2px solid rgba(16, 185, 129, 0.3);
+            border-radius: 10px;
+            color: #10b981;
+            font-size: 0.9em;
+        }
+
+        /* Stats cards */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
             margin-top: 20px;
-            text-decoration: none;
-            color: #0078d7;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            border: 2px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .stat-number {
+            font-size: 1.8em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        /* Submit button */
+        .submit-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 15px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 30px auto 0;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .submit-btn:active {
+            transform: translateY(-1px);
+        }
+
+        /* Success animation */
+        @keyframes successPulse {
+            0% { transform: scale(0.8); opacity: 0; }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .success-icon {
+            animation: successPulse 0.6s ease;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-card {
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            .tables-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>Edit Module: {{ module.name }}</h2>
-        <form method="POST" enctype="multipart/form-data">
-            {% csrf_token %}
-            <label>Upload Knowledge Graph:</label><br>
-            <input type="file" name="knowledge_graph"><br><br>
-            <label>Upload Metrics:</label><br>
-            <input type="file" name="metrics"><br><br>
-            <button type="submit">Save Changes</button>
-        </form>
-        <a href="{% url 'dashboard' %}">← Back to Dashboard</a>
+    <!-- Animated gradient background -->
+    <div class="animated-bg"></div>
+
+    <!-- Floating blur effects -->
+    <div class="floating-elements">
+        <div class="floating-circle circle-1"></div>
+        <div class="floating-circle circle-2"></div>
+        <div class="floating-circle circle-3"></div>
     </div>
+
+    <!-- Main container -->
+    <div class="container">
+        <div class="main-card">
+            <!-- Header -->
+            <div class="header">
+                <div class="module-icon">
+                    ✏️
+                </div>
+                <h1>Edit Module</h1>
+                <p class="module-subtitle">{{ module.name }}</p>
+            </div>
+
+            <!-- Navigation Pills -->
+            <div class="nav-pills">
+                <a href="{% url 'dashboard' %}" class="nav-pill">
+                    <i class="fas fa-arrow-left"></i> Dashboard
+                </a>
+                <a href="{% url 'chat_module' module.id %}" class="nav-pill">
+                    <i class="fas fa-comments"></i> Open Chat
+                </a>
+                <a href="#" class="nav-pill">
+                    <i class="fas fa-chart-line"></i> Analytics
+                </a>
+            </div>
+
+            <!-- Form -->
+            <form method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+
+                <!-- Table Selection Section -->
+                <div class="form-section">
+                    <div class="section-title">
+                        <div class="section-icon">
+                            <i class="fas fa-database"></i>
+                        </div>
+                        Select Tables
+                    </div>
+                    
+                    <div class="tables-grid">
+                        {% for table in tables %}
+                        <label class="table-label">
+                            <input type="checkbox" 
+                                   name="selected_tables" 
+                                   value="{{ table }}"
+                                   {% if table in selected_tables %}checked{% endif %}
+                                   class="table-checkbox">
+                            <span class="table-name">{{ table }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+
+                    <div class="stats-row">
+                        <div class="stat-card">
+                            <div class="stat-number" id="selected-count">0</div>
+                            <div class="stat-label">Selected</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">{{ tables|length }}</div>
+                            <div class="stat-label">Available</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">100%</div>
+                            <div class="stat-label">Synced</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Knowledge Graph Upload -->
+                <div class="form-section">
+                    <div class="section-title">
+                        <div class="section-icon">
+                            <i class="fas fa-project-diagram"></i>
+                        </div>
+                        Knowledge Graph
+                    </div>
+                    
+                    <div class="file-upload-wrapper">
+                        <div class="file-upload-area">
+                            <i class="fas fa-cloud-upload-alt file-icon"></i>
+                            <p class="file-label">Drop your knowledge graph file here or click to browse</p>
+                            <span class="file-button">Choose File</span>
+                            <input type="file" 
+                                   name="knowledge_graph" 
+                                   accept=".txt,.csv"
+                                   class="file-input"
+                                   id="knowledge-graph-input">
+                        </div>
+                        
+                        {% if module.knowledge_graph %}
+                        <div class="current-file">
+                            <i class="fas fa-check-circle"></i>
+                            Current: {{ module.knowledge_graph.name }}
+                        </div>
+                        {% endif %}
+                        
+                        <div id="kg-preview" style="display: none;" class="current-file">
+                            <i class="fas fa-file-alt"></i>
+                            <span id="kg-filename"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Metrics Upload -->
+                <div class="form-section">
+                    <div class="section-title">
+                        <div class="section-icon">
+                            <i class="fas fa-chart-bar"></i>
+                        </div>
+                        Metrics File
+                    </div>
+                    
+                    <div class="file-upload-wrapper">
+                        <div class="file-upload-area">
+                            <i class="fas fa-analytics file-icon"></i>
+                            <p class="file-label">Drop your metrics file here or click to browse</p>
+                            <span class="file-button">Choose File</span>
+                            <input type="file" 
+                                   name="metrics" 
+                                   accept=".txt,.csv"
+                                   class="file-input"
+                                   id="metrics-input">
+                        </div>
+                        
+                        {% if module.metrics %}
+                        <div class="current-file">
+                            <i class="fas fa-check-circle"></i>
+                            Current: {{ module.metrics.name }}
+                        </div>
+                        {% endif %}
+                        
+                        <div id="metrics-preview" style="display: none;" class="current-file">
+                            <i class="fas fa-file-alt"></i>
+                            <span id="metrics-filename"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" class="submit-btn">
+                    <i class="fas fa-save"></i>
+                    Save All Changes
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Update selected count
+        function updateSelectedCount() {
+            const checkboxes = document.querySelectorAll('.table-checkbox:checked');
+            document.getElementById('selected-count').textContent = checkboxes.length;
+        }
+
+        // Initialize count and add listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            updateSelectedCount();
+            
+            document.querySelectorAll('.table-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', updateSelectedCount);
+            });
+        });
+
+        // File upload preview
+        document.getElementById('knowledge-graph-input').addEventListener('change', function(e) {
+            const fileName = e.target.files[0]?.name;
+            if (fileName) {
+                document.getElementById('kg-filename').textContent = fileName;
+                document.getElementById('kg-preview').style.display = 'flex';
+            }
+        });
+
+        document.getElementById('metrics-input').addEventListener('change', function(e) {
+            const fileName = e.target.files[0]?.name;
+            if (fileName) {
+                document.getElementById('metrics-filename').textContent = fileName;
+                document.getElementById('metrics-preview').style.display = 'flex';
+            }
+        });
+
+        // Drag and drop functionality
+        const uploadAreas = document.querySelectorAll('.file-upload-area');
+        
+        uploadAreas.forEach(area => {
+            area.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                area.style.borderColor = '#764ba2';
+                area.style.transform = 'scale(1.05)';
+            });
+            
+            area.addEventListener('dragleave', () => {
+                area.style.borderColor = '#667eea';
+                area.style.transform = 'scale(1)';
+            });
+            
+            area.addEventListener('drop', (e) => {
+                e.preventDefault();
+                area.style.borderColor = '#667eea';
+                area.style.transform = 'scale(1)';
+                
+                const input = area.querySelector('.file-input');
+                input.files = e.dataTransfer.files;
+                input.dispatchEvent(new Event('change'));
+            });
+        });
+    </script>
 </body>
 </html>

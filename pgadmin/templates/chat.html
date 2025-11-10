@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Assistant - Data Query Interface</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <style>
+    .typing-indicator::after {
+      content: '...';
+      animation: typing 1.5s infinite;
+    }
+    @keyframes typing {
+      0%, 60%, 100% { opacity: 0; }
+      30% { opacity: 1; }
+    }
+    .message-animation {
+      animation: slideIn 0.3s ease-out;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(-20px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    .option-btn:hover {
+      transform: translateX(4px);
+      transition: all 0.2s;
+    }
+    .conversation-item:hover {
+      background-color: #f3f4f6;
+    }
+    .conversation-item.active {
+      background-color: #e5e7eb;
+    }
+    #sidebar {
+      transition: margin-left 0.3s;
+    }
+    .hidden-sidebar {
+      margin-left: -256px;
+    }
+    .chart-container {
+      min-height: 400px;
+    }
+    .scrollbar-thin::-webkit-scrollbar {
+      width: 8px;
+    }
+    .scrollbar-thin::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 4px;
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 flex h-screen overflow-hidden">
+
+<!-- Sidebar -->
+<div id="sidebar" class="w-64 bg-white border-r flex flex-col h-screen">
+  <!-- New Chat Button -->
+  <div class="p-4 border-b">
+    <button 
+      id="new-chat-btn"
+      class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+    >
+      <span>+</span> New Chat
+    </button>
+  </div>
+  
+  <!-- Conversations List -->
+  <div class="flex-1 overflow-y-auto p-2 scrollbar-thin" id="conversations-list">
+    <div class="text-center text-gray-400 text-sm py-8">
+      No conversations yet
+    </div>
+  </div>
+  
+  <!-- Footer -->
+  <div class="p-4 border-t text-xs text-gray-500">
+    <div class="font-semibold mb-1">Session Context:</div>
+    <div id="sidebar-entities" class="text-gray-600 mt-1">
+      <div class="text-gray-400">No context yet</div>
+    </div>
+  </div>
+</div>
+
+<!-- Main Chat Area -->
+<div class="flex-1 flex flex-col h-screen">
+  <!-- Header -->
+  <div class="bg-white shadow-sm border-b px-6 py-4 flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-semibold text-gray-800">Data Query Assistant</h1>
+      <p class="text-sm text-gray-500">Ask questions about your data</p>
+    </div>
+    <button 
+      id="toggle-sidebar-btn"
+      class="text-gray-600 hover:text-gray-800 text-2xl"
+      title="Toggle sidebar"
+    >
+      ☰
+    </button>
+  </div>
+
+  <!-- Chat Container -->
+  <div class="flex-1 overflow-y-auto p-6 scrollbar-thin" id="chat-box">
+    <div class="max-w-4xl mx-auto">
+      <!-- Welcome Message -->
+      <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <p class="text-blue-700 font-medium">
+          👋 Welcome! I can help you query your database.
+        </p>
+        <ul class="text-sm text-blue-600 mt-2 ml-4 list-disc">
+          <li>Sales data for distributors or products</li>
+          <li>Shipment information for parties</li>
+          <li>Product performance metrics</li>
+          <li>Interactive charts with download options</li>
+        </ul>
+        <p class="text-xs text-blue-500 mt-2">
+          💡 Your conversations and charts are saved automatically!
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Typing Indicator -->
+  <div id="typing-indicator" class="hidden px-6 pb-2">
+    <div class="max-w-4xl mx-auto">
+      <div class="text-gray-500 text-sm typing-indicator">Assistant is typing</div>
+    </div>
+  </div>
+
+  <!-- Input Area -->
+  <div class="bg-white border-t p-4">
+    <div class="max-w-4xl mx-auto flex gap-2">
+      <input 
+        id="message-input" 
+        class="flex-1 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+        placeholder="Type your question here..."
+      />
+      <button 
+        id="send-btn" 
+        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+      >
+        Send
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== CONFIGURATION ====================
+const API_URL = "/api/chat/";
+const CONVERSATIONS_API = "/api/conversations/";
+
+// ==================== CSRF TOKEN ====================
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+
+const csrftoken = getCookie('csrftoken');
+
+// ==================== STATE MANAGEMENT ====================
+let isProcessing = false;
+let sessionEntities = {};
+let currentConversationId = null;
+let conversations = [];
+
+// ==================== SIDEBAR FUNCTIONS ====================
+async function loadConversations() {
+  try {
+    const response = await fetch(CONVERSATIONS_API);
+    const data = await response.json();
+    conversations = data.conversations || [];
+    
+    renderConversations();
+  } catch (error) {
+    console.error("Error loading conversations:", error);
+  }
+}
+
+function renderConversations() {
+  const listDiv = document.getElementById('conversations-list');
+  
+  if (conversations.length === 0) {
+    listDiv.innerHTML = '<div class="text-center text-gray-400 text-sm py-8">No conversations yet</div>';
+    return;
+  }
+  
+  listDiv.innerHTML = conversations.map(conv => `
+    <div 
+      class="conversation-item ${conv.id === currentConversationId ? 'active' : ''} p-3 mb-2 rounded cursor-pointer border border-gray-200 hover:border-blue-400 transition-all"
+      onclick="loadConversation(${conv.id})"
+    >
+      <div class="font-medium text-gray-800 text-sm truncate">${escapeHtml(conv.title)}</div>
+      <div class="text-xs text-gray-500 mt-1">${formatDate(conv.updated_at)}</div>
+      <div class="flex justify-between items-center mt-2">
+        <span class="text-xs text-gray-400">${conv.message_count} messages</span>
+        <button 
+          onclick="deleteConversation(${conv.id}, event)"
+          class="text-red-500 hover:text-red-700 text-xs"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function loadConversation(convId) {
+  try {
+    const response = await fetch(`${CONVERSATIONS_API}${convId}/`);
+    const data = await response.json();
+    
+    currentConversationId = convId;
+    sessionEntities = data.conversation.entities || {};
+    
+    // Clear chat box
+    const chatBox = document.getElementById('chat-box');
+    const container = chatBox.querySelector('.max-w-4xl');
+    container.innerHTML = '';
+    
+    // Render messages
+    data.messages.forEach(msg => {
+      if (msg.metadata && msg.metadata.type === 'selection') {
+        return; // Skip selection messages
+      }
+      
+      addMessage(escapeHtml(msg.content), msg.is_user, 'normal', false);
+      
+      // Render chart if present
+      if (!msg.is_user && msg.metadata && msg.metadata.chart) {
+        console.log("📊 Loading saved chart:", msg.metadata.chart);
+        displayChart(msg.metadata.chart);
+      }
+    });
+    
+    updateSidebarEntities();
+    renderConversations();
+    
+  } catch (error) {
+    console.error("Error loading conversation:", error);
+  }
+}
+
+async function deleteConversation(convId, event) {
+  event.stopPropagation();
+  
+  if (!confirm("Delete this conversation?")) return;
+  
+  try {
+    await fetch(`${CONVERSATIONS_API}${convId}/delete/`, {
+      method: 'DELETE',
+      headers: { 'X-CSRFToken': csrftoken }
+    });
+    
+    if (convId === currentConversationId) {
+      startNewChat();
+    }
+    
+    await loadConversations();
+  } catch (error) {
+    console.error("Error deleting conversation:", error);
+  }
+}
+
+function startNewChat() {
+  currentConversationId = null;
+  sessionEntities = {};
+  
+  const chatBox = document.getElementById('chat-box');
+  const container = chatBox.querySelector('.max-w-4xl');
+  container.innerHTML = `
+    <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+      <p class="text-blue-700 font-medium">👋 Welcome! I can help you query your database.</p>
+      <ul class="text-sm text-blue-600 mt-2 ml-4 list-disc">
+        <li>Sales data for distributors or products</li>
+        <li>Shipment information for parties</li>
+        <li>Product performance metrics</li>
+        <li>Interactive charts with download options</li>
+      </ul>
+      <p class="text-xs text-blue-500 mt-2">💡 Your conversations and charts are saved automatically!</p>
+    </div>
+  `;
+  
+  updateSidebarEntities();
+  renderConversations();
+  document.getElementById('message-input').focus();
+}
+
+// ==================== UI HELPER FUNCTIONS ====================
+function addMessage(content, isUser = false, type = 'normal', animate = true) {
+  const chatBox = document.getElementById("chat-box");
+  const messageContainer = chatBox.querySelector('.max-w-4xl');
+  
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `mb-4 ${animate ? 'message-animation' : ''} ${isUser ? 'text-right' : 'text-left'}`;
+  
+  let bgColor = isUser ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200';
+  if (type === 'error') bgColor = 'bg-red-50 border border-red-200 text-red-700';
+  if (type === 'clarification') bgColor = 'bg-yellow-50 border border-yellow-300';
+  
+  messageDiv.innerHTML = `
+    <div class="inline-block max-w-2xl ${bgColor} rounded-lg px-4 py-3 shadow-sm">
+      ${content}
+    </div>
+  `;
+  
+  messageContainer.appendChild(messageDiv);
+  chatBox.scrollTop = chatBox.scrollHeight;
+  return messageDiv;
+}
+
+function showTyping(show = true) {
+  document.getElementById('typing-indicator').classList.toggle('hidden', !show);
+}
+
+function setInputState(enabled = true) {
+  const input = document.getElementById('message-input');
+  const button = document.getElementById('send-btn');
+  input.disabled = !enabled;
+  button.disabled = !enabled;
+  isProcessing = !enabled;
+  if (enabled) input.focus();
+}
+
+function updateSidebarEntities() {
+  const sidebarDiv = document.getElementById('sidebar-entities');
+  if (Object.keys(sessionEntities).length > 0) {
+    sidebarDiv.innerHTML = Object.entries(sessionEntities)
+      .map(([key, value]) => `<div class="truncate" title="${key}: ${value}"><strong>${key}:</strong> ${value}</div>`)
+      .join('');
+  } else {
+    sidebarDiv.innerHTML = '<div class="text-gray-400">No context yet</div>';
+  }
+}
+
+// ==================== CHART DISPLAY FUNCTIONS ====================
+function displayChart(chartData) {
+  if (!chartData || !chartData.plotly_json) {
+    console.log("⚠️ No chart data to display");
+    return;
+  }
+  
+  console.log("📊 Displaying chart:", chartData.chart_info);
+  
+  const chartId = `chart-${Date.now()}`;
+  
+  const chartDiv = document.createElement('div');
+  chartDiv.className = 'mb-4 message-animation';
+  chartDiv.innerHTML = `
+    <div class="inline-block w-full max-w-full bg-white border rounded-lg shadow-lg overflow-hidden">
+      <!-- Chart Header -->
+      <div class="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-3 flex justify-between items-center">
+        <div class="flex-1">
+          <h3 class="font-semibold text-lg">${escapeHtml(chartData.chart_info.title)}</h3>
+          <p class="text-xs text-blue-100 mt-1">${escapeHtml(chartData.chart_info.reasoning)}</p>
+        </div>
+        <div class="flex gap-2">
+          <button 
+            onclick="downloadChart('${chartId}')"
+            class="bg-white text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-1"
+          >
+            <span>📊</span> Download Chart
+          </button>
+          <button 
+            onclick="downloadCSV(this)"
+            class="bg-white text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-1"
+          >
+            <span>📥</span> Download CSV
+          </button>
+        </div>
+      </div>
+      
+      <!-- Chart Container -->
+      <div class="p-4 bg-gray-50">
+        <div id="${chartId}" class="chart-container bg-white rounded"></div>
+      </div>
+      
+      <!-- Chart Info Footer -->
+      <div class="bg-white px-4 py-3 text-xs text-gray-600 border-t flex justify-between items-center">
+        <div class="flex gap-4">
+          <span><strong>Type:</strong> ${chartData.chart_info.type.replace('_', ' ').toUpperCase()}</span>
+          <span><strong>Data Points:</strong> ${chartData.chart_info.data_points}</span>
+        </div>
+        <div class="text-gray-500">
+          <span><strong>X:</strong> ${chartData.chart_info.x_label}</span>
+          <span class="mx-2">|</span>
+          <span><strong>Y:</strong> ${chartData.chart_info.y_label}</span>
+        </div>
+      </div>
+      
+      <!-- Hidden data storage -->
+      <textarea class="hidden chart-data-store">${escapeHtml(JSON.stringify(chartData))}</textarea>
+    </div>
+  `;
+  
+  document.getElementById('chat-box').querySelector('.max-w-4xl').appendChild(chartDiv);
+  
+  // Render Plotly chart
+  try {
+    const plotlyData = JSON.parse(chartData.plotly_json);
+    
+    Plotly.newPlot(chartId, plotlyData.data, plotlyData.layout, {
+      responsive: true,
+      displayModeBar: true,
+      displaylogo: false,
+      modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'toImage']
+    });
+    
+    console.log(`✅ Chart rendered: ${chartId}`);
+  } catch (error) {
+    console.error("❌ Error rendering Plotly chart:", error);
+  }
+  
+  // Scroll to chart
+  document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
+}
+
+// ==================== DOWNLOAD FUNCTIONS ====================
+function downloadChart(chartId) {
+  try {
+    Plotly.downloadImage(chartId, {
+      format: 'png',
+      width: 1200,
+      height: 700,
+      filename: `chart_${Date.now()}`
+    });
+    
+    console.log("📊 Chart download initiated");
+    
+  } catch (error) {
+    console.error("❌ Error downloading chart:", error);
+    alert("Error downloading chart. Please try again.");
+  }
+}
+
+function downloadCSV(button) {
+  try {
+    const chartDataStore = button.closest('.inline-block').querySelector('.chart-data-store');
+    const chartData = JSON.parse(chartDataStore.value);
+    
+    if (!chartData.csv_data) {
+      alert("No CSV data available");
+      return;
+    }
+    
+    const blob = new Blob([chartData.csv_data], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `data_${Date.now()}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    const originalText = button.innerHTML;
+    button.innerHTML = '<span>✓</span> Downloaded!';
+    button.classList.add('bg-green-500', 'text-white');
+    
+    setTimeout(() => {
+      button.innerHTML = originalText;
+      button.classList.remove('bg-green-500', 'text-white');
+    }, 2000);
+    
+  } catch (error) {
+    console.error("❌ Error downloading CSV:", error);
+    alert("Error downloading CSV. Please try again.");
+  }
+}
+
+// ==================== MAIN SEND MESSAGE FUNCTION ====================
+async function sendMessage(msg = null, feedback = null) {
+  if (isProcessing) return;
+  
+  const messageInput = document.getElementById("message-input");
+  
+  if (!msg && !feedback) {
+    msg = messageInput.value.trim();
+  }
+  
+  if (!msg && !feedback) return;
+  
+  if (!feedback) {
+    addMessage(escapeHtml(msg), true);
+    messageInput.value = "";
+  }
+  
+  setInputState(false);
+  showTyping(true);
+  
+  try {
+    const payload = feedback ? 
+      { feedback, conversation_id: currentConversationId } : 
+      { message: msg, conversation_id: currentConversationId };
+    
+    console.log("📤 Sending:", payload);
+    
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrftoken
+      },
+      body: JSON.stringify(payload),
+    });
+    
+    showTyping(false);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log("📥 Received:", data);
+    
+    if (data.conversation_id) {
+      currentConversationId = data.conversation_id;
+    }
+    
+    if (data.type === "clarification") {
+      if (data.subtype === "column") {
+        handleColumnClarification(data);
+      } else {
+        handleValueClarification(data);
+      }
+    } else if (data.type === "error") {
+      addMessage(escapeHtml(data.message), false, 'error');
+    } else {
+      addMessage(formatMessage(data.message), false);
+      
+      if (data.entities) {
+        sessionEntities = { ...sessionEntities, ...data.entities };
+        updateSidebarEntities();
+      }
+      
+      // Display chart if present
+      if (data.chart_data) {
+        console.log("📊 Received chart data:", data.chart_data.chart_info);
+        displayChart(data.chart_data);
+      } else {
+        console.log("⚠️ No chart_data in response");
+      }
+    }
+    
+    await loadConversations();
+    
+  } catch (error) {
+    console.error("❌ Error:", error);
+    showTyping(false);
+    addMessage("Sorry, I encountered an error. Please try again.", false, 'error');
+  } finally {
+    setInputState(true);
+  }
+}
+
+// ==================== CLARIFICATION HANDLERS ====================
+function handleColumnClarification(data) {
+  const clarificationDiv = addMessage('', false, 'clarification');
+  
+  const optionsHtml = data.options.map((opt, idx) => `
+    <button 
+      class="option-btn block w-full text-left px-4 py-3 mb-2 bg-white hover:bg-blue-50 border-2 border-gray-300 hover:border-blue-400 rounded-md transition-all"
+      onclick="selectColumn('${escapeJs(data.entity_type)}', '${escapeJs(data.entity)}', '${escapeJs(opt.table)}', '${escapeJs(opt.column)}', ${idx})"
+    >
+      <div class="font-semibold text-gray-800">
+        <span class="text-blue-600 font-bold">${idx + 1}.</span> ${escapeHtml(opt.column)}
+      </div>
+      <div class="text-sm text-gray-600 mt-1">
+        Table: ${escapeHtml(opt.table)} | Best match: "${escapeHtml(opt.best_match)}" (${opt.count} total)
+      </div>
+    </button>
+  `).join('');
+  
+  clarificationDiv.querySelector('div').innerHTML = `
+    <div class="font-semibold mb-3 text-gray-800">🔀 ${escapeHtml(data.message)}</div>
+    <div class="mt-2">${optionsHtml}</div>
+    <div class="text-xs text-gray-500 mt-3">Select the column you meant</div>
+  `;
+}
+
+function handleValueClarification(data) {
+  const clarificationDiv = addMessage('', false, 'clarification');
+  
+  const optionsHtml = data.options.map((opt, idx) => `
+    <button 
+      class="option-btn block w-full text-left px-4 py-2.5 mb-2 bg-white hover:bg-blue-50 border-2 border-gray-300 hover:border-blue-400 rounded-md transition-all text-gray-700 hover:text-blue-700 font-medium"
+      onclick="selectValue('${escapeJs(data.entity_type)}', '${escapeJs(opt)}', ${idx})"
+    >
+      <span class="text-blue-600 font-bold">${idx + 1}.</span> ${escapeHtml(opt)}
+    </button>
+  `).join('');
+  
+  const seeMoreHtml = data.has_more ? `
+    <div class="text-center my-2">
+      <button class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded border border-gray-300">
+        📋 Showing ${data.options.length} of ${data.total_count} results
+      </button>
+    </div>
+  ` : '';
+  
+  const customInputHtml = `
+    <div class="mt-3 pt-3 border-t border-gray-300">
+      <div class="text-sm text-gray-600 mb-2 font-medium">None of these? Type your own:</div>
+      <div class="flex gap-2">
+        <input 
+          id="custom-entity-input" 
+          type="text" 
+          class="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Type exact ${escapeHtml(data.entity_type)} name..."
+        />
+        <button 
+          class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded font-medium text-sm"
+          onclick="submitCustomValue('${escapeJs(data.entity_type)}')"
+        >
+          ✓ Submit
+        </button>
+      </div>
+    </div>
+  `;
+  
+  clarificationDiv.querySelector('div').innerHTML = `
+    <div class="font-semibold mb-3 text-gray-800">🤔 ${escapeHtml(data.message)}</div>
+    <div class="mt-2">${optionsHtml}${seeMoreHtml}${customInputHtml}</div>
+    <div class="text-xs text-gray-500 mt-2">Click an option or type your own</div>
+  `;
+}
+
+// ==================== SELECTION HANDLERS ====================
+function selectColumn(entityType, entity, table, column, index) {
+  disableAllButtons();
+  highlightButton(index);
+  addMessage(`Selected column: ${column} in ${table}`, true);
+  sendMessage(null, {
+    type: "column_selection",
+    entity_type: entityType,
+    entity: entity,
+    selected_table: table,
+    selected_column: column
+  });
+}
+
+function selectValue(entityType, selectedValue, index) {
+  disableAllButtons();
+  highlightButton(index);
+  addMessage(`✅ Selected: ${escapeHtml(selectedValue)}`, true);
+  sendMessage(null, {
+    type: "value_selection",
+    entity_type: entityType,
+    selected_option: selectedValue
+  });
+}
+
+function submitCustomValue(entityType) {
+  const input = document.getElementById('custom-entity-input');
+  const customValue = input.value.trim();
+  
+  if (!customValue) {
+    alert("Please enter a value");
+    return;
+  }
+  
+  disableAllButtons();
+  input.disabled = true;
+  addMessage(`✏️ Custom input: ${escapeHtml(customValue)}`, true);
+  sendMessage(null, {
+    type: "custom_input",
+    entity_type: entityType,
+    custom_value: customValue
+  });
+}
+
+// ==================== UTILITY FUNCTIONS ====================
+function disableAllButtons() {
+  document.querySelectorAll('.option-btn').forEach(btn => {
+    btn.disabled = true;
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+  });
+}
+
+function highlightButton(index) {
+  const buttons = document.querySelectorAll('.option-btn');
+  if (buttons[index]) {
+    buttons[index].classList.remove('border-gray-300');
+    buttons[index].classList.add('border-green-500', 'bg-green-50');
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function escapeJs(text) {
+  return String(text).replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
+}
+
+function formatMessage(message) {
+  return message
+    .replace(/\n/g, '<br>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>');
+}
+
+function formatDate(dateStr) {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+  return date.toLocaleDateString();
+}
+
+// ==================== EVENT LISTENERS ====================
+document.getElementById("send-btn").addEventListener("click", () => sendMessage());
+
+document.getElementById("message-input").addEventListener("keypress", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+document.getElementById("new-chat-btn").addEventListener("click", startNewChat);
+
+document.getElementById("toggle-sidebar-btn").addEventListener("click", () => {
+  document.getElementById("sidebar").classList.toggle("hidden-sidebar");
+});
+
+// ==================== INITIALIZATION ====================
+window.addEventListener('load', async () => {
+  console.log("🚀 Application initialized");
+  setInputState(true);
+  await loadConversations();
+  document.getElementById('message-input').focus();
+});
+</script>
+
+</body>
+</html>

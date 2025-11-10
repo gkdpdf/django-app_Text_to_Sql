@@ -4,81 +4,407 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - PostgreSQL Viewer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Animations */
+        @keyframes gradient {
+            0% {
+                background-position: 0% 50%;
+            }
+            50% {
+                background-position: 100% 50%;
+            }
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px) scale(1);
+            }
+            50% {
+                transform: translateY(-20px) scale(1.1);
+            }
+        }
+
+        @keyframes slideInUp {
+            from {
+                transform: translateY(30px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes glow {
+            0% {
+                box-shadow: 0 0 5px rgba(102, 126, 234, 0.5);
+            }
+            50% {
+                box-shadow: 0 0 20px rgba(102, 126, 234, 0.8), 0 0 40px rgba(102, 126, 234, 0.4);
+            }
+            100% {
+                box-shadow: 0 0 5px rgba(102, 126, 234, 0.5);
+            }
+        }
+
         body {
             font-family: 'Poppins', sans-serif;
-            background: linear-gradient(135deg, #d3e9ff, #f0f9ff);
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 100vh;
-            margin: 0;
+            min-height: 100vh;
+            position: relative;
+            overflow: hidden;
         }
-        .container {
-            background: white;
-            padding: 40px 60px;
-            border-radius: 20px;
-            box-shadow: 0 4px 25px rgba(0,0,0,0.1);
+
+        /* Animated gradient background */
+        .animated-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #f5576c);
+            background-size: 400% 400%;
+            animation: gradient 15s ease infinite;
+            z-index: -2;
+        }
+
+        /* Floating blur effects */
+        .floating-elements {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: -1;
+        }
+
+        .floating-circle {
+            position: absolute;
+            border-radius: 50%;
+            mix-blend-mode: multiply;
+            filter: blur(40px);
+            opacity: 0.7;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .circle-1 {
+            width: 300px;
+            height: 300px;
+            background: rgba(102, 126, 234, 0.3);
+            top: 10%;
+            left: 10%;
+        }
+
+        .circle-2 {
+            width: 350px;
+            height: 350px;
+            background: rgba(118, 75, 162, 0.3);
+            top: 60%;
+            right: 10%;
+            animation-delay: 2s;
+        }
+
+        .circle-3 {
             width: 400px;
+            height: 400px;
+            background: rgba(240, 147, 251, 0.3);
+            bottom: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            animation-delay: 4s;
+        }
+
+        .circle-4 {
+            width: 250px;
+            height: 250px;
+            background: rgba(245, 87, 108, 0.3);
+            top: 30%;
+            right: 30%;
+            animation-delay: 1s;
+        }
+
+        /* Container with glass effect */
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 50px 60px;
+            border-radius: 25px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.2);
+            width: 450px;
+            max-width: 90%;
             text-align: center;
+            position: relative;
+            animation: slideInUp 0.6s ease-out;
         }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 2px;
+        }
+
         h2 {
-            color: #0078d7;
-            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 2.2em;
+            font-weight: 600;
+            margin-bottom: 20px;
         }
-        input {
-            width: 90%;
-            padding: 10px;
+
+        .logo-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px auto;
+            font-size: 2.5em;
+            animation: glow 3s ease-in-out infinite;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 14px 20px;
             margin: 10px 0;
-            border-radius: 10px;
-            border: 1px solid #ccc;
+            border-radius: 15px;
+            border: 2px solid transparent;
+            background: rgba(102, 126, 234, 0.05);
             font-size: 1em;
+            transition: all 0.3s ease;
+            font-family: 'Poppins', sans-serif;
         }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            outline: none;
+            border: 2px solid #667eea;
+            background: white;
+            box-shadow: 0 0 15px rgba(102, 126, 234, 0.1);
+        }
+
         button {
-            background: #0078d7;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 10px 30px;
+            padding: 14px 40px;
             border: none;
-            border-radius: 10px;
+            border-radius: 15px;
             cursor: pointer;
-            transition: 0.3s;
+            font-size: 1.1em;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+            width: 100%;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
         }
+
         button:hover {
-            background: #005fa3;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
         }
+
+        button:active {
+            transform: translateY(-1px);
+        }
+
         .error {
-            color: red;
-            margin-top: 10px;
+            color: #e74c3c;
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(231, 76, 60, 0.1);
+            border-radius: 10px;
+            font-size: 0.95em;
         }
+
         .table-list {
             text-align: left;
-            margin-top: 20px;
-            background: #f9f9f9;
+            margin-top: 30px;
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 20px;
+            padding: 25px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .table-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .table-list::-webkit-scrollbar-track {
+            background: #f1f1f1;
             border-radius: 10px;
-            padding: 15px;
         }
+
+        .table-list::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+        }
+
         .table-list h3 {
-            color: #333;
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.2em;
+            font-weight: 600;
         }
+
         .table-list ul {
             list-style-type: none;
-            padding-left: 10px;
+            padding: 0;
         }
+
         .table-list li {
-            padding: 5px 0;
-            border-bottom: 1px solid #eee;
+            padding: 12px 15px;
+            margin-bottom: 8px;
+            background: white;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .table-list li:hover {
+            border-color: #667eea;
+            transform: translateX(5px);
+            box-shadow: 0 3px 10px rgba(102, 126, 234, 0.1);
+        }
+
+        .table-list label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .table-list input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            cursor: pointer;
+            accent-color: #667eea;
+        }
+
+        .module-name-input {
+            width: 100%;
+            padding: 14px 20px;
+            margin: 20px 0;
+            border-radius: 15px;
+            border: 2px solid transparent;
+            background: white;
+            font-size: 1em;
+            transition: all 0.3s ease;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .module-name-input:focus {
+            outline: none;
+            border: 2px solid #667eea;
+            box-shadow: 0 0 15px rgba(102, 126, 234, 0.1);
+        }
+
+        .welcome-badge {
+            display: inline-block;
+            padding: 8px 20px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 20px;
+            color: #667eea;
+            font-size: 0.9em;
+            margin-bottom: 20px;
+        }
+
+        .divider {
+            width: 100%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #667eea, transparent);
+            margin: 30px 0;
+        }
+
+        /* Responsive design */
+        @media (max-width: 500px) {
+            .container {
+                padding: 30px 25px;
+            }
+
+            h2 {
+                font-size: 1.8em;
+            }
+
+            .logo-icon {
+                width: 60px;
+                height: 60px;
+                font-size: 2em;
+            }
+        }
+
+        /* Additional effects */
+        .input-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #667eea;
+            font-size: 1.2em;
+        }
+
+        .input-with-icon {
+            padding-left: 45px !important;
         }
     </style>
 </head>
 <body>
-    <div class="container">
+    <!-- Animated gradient background -->
+    <div class="animated-bg"></div>
 
+    <!-- Floating blur effects -->
+    <div class="floating-elements">
+        <div class="floating-circle circle-1"></div>
+        <div class="floating-circle circle-2"></div>
+        <div class="floating-circle circle-3"></div>
+        <div class="floating-circle circle-4"></div>
+    </div>
+
+    <!-- Main container -->
+    <div class="container">
         {% if user_name %}
             <!-- ========== Logged In View ========== -->
-            <h2>Welcome, {{ user_name|title }}!</h2>
+            <div class="logo-icon">
+                📊
+            </div>
+            <h2>Welcome Back!</h2>
+            <div class="welcome-badge">
+                👤 {{ user_name|title }}
+            </div>
 
             <div class="table-list">
-                <h3>Select Tables for New Module:</h3>
+                <h3>🗂️ Select Tables for New Module</h3>
                 <form method="POST" action="{% url 'create_module' %}">
                     {% csrf_token %}
                     {% if tables %}
@@ -87,35 +413,66 @@
                                 <li>
                                     <label>
                                         <input type="checkbox" name="selected_tables" value="{{ table }}">
-                                        {{ table }}
+                                        <span>{{ table }}</span>
                                     </label>
                                 </li>
                             {% endfor %}
                         </ul>
 
-                        <input type="text" name="module_name" placeholder="Enter Module Name" required><br><br>
-                        <button type="submit">Create Module</button>
+                        <div class="divider"></div>
+
+                        <input type="text" 
+                               name="module_name" 
+                               class="module-name-input" 
+                               placeholder="✨ Enter Module Name" 
+                               required>
+                        
+                        <button type="submit">
+                            🚀 Create Module
+                        </button>
                     {% else %}
-                        <p>No user-defined tables found.</p>
+                        <p style="text-align: center; color: #666; padding: 20px;">
+                            📭 No user-defined tables found in your database.
+                        </p>
                     {% endif %}
                 </form>
             </div>
 
         {% else %}
             <!-- ========== Login Form ========== -->
-            <h2>Login</h2>
+            <div class="logo-icon">
+                🔐
+            </div>
+            <h2>Welcome Back</h2>
+            <p style="color: #888; margin-bottom: 30px;">Login to manage your PostgreSQL modules</p>
+            
             <form method="POST" action="">
                 {% csrf_token %}
-                <input type="text" name="username" placeholder="Username" required><br>
-                <input type="password" name="password" placeholder="Password" required><br>
-                <button type="submit">Login</button>
+                <div class="input-group">
+                    <input type="text" 
+                           name="username" 
+                           placeholder="👤 Username" 
+                           required>
+                </div>
+                
+                <div class="input-group">
+                    <input type="password" 
+                           name="password" 
+                           placeholder="🔑 Password" 
+                           required>
+                </div>
+                
+                <button type="submit">
+                    Login →
+                </button>
             </form>
 
             {% if error_message %}
-                <div class="error">{{ error_message }}</div>
+                <div class="error">
+                    ⚠️ {{ error_message }}
+                </div>
             {% endif %}
         {% endif %}
-
     </div>
 </body>
 </html>
