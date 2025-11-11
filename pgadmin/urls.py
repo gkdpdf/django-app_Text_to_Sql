@@ -2,28 +2,36 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    # ---------- AUTH & DASHBOARD ----------
-    path('', views.login_view, name='login'),
+    # Home
+    path('', views.home_view, name='home'),
+    
+    # Authentication
+    path('login/', views.login_view, name='login'),
+    
+    # Dashboard and Modules
     path('dashboard/', views.dashboard_view, name='dashboard'),
-
-    # ---------- MODULE CREATION & EDIT ----------
-    path('new/', views.new_module_view, name='new_module'),
-    path('edit/<int:module_id>/', views.edit_module_view, name='edit_module'),
-
-
-    # path('api/chat/', views.chat_api, name='chat_api'),
-    # ---------- CHATBOT PAGE (New) ----------
-    # path('chat/<int:module_id>/', views.module_chat_view, name='chat_module'),
-
+    path('new-module/', views.new_module_view, name='new_module'),
+    path('edit-module/<int:module_id>/', views.edit_module_view, name='edit_module'),
+    path('delete-module/<int:module_id>/', views.delete_module_view, name='delete_module'),
+    
+    # Utility
+    path('get-table-columns/', views.get_table_columns, name='get_table_columns'),
+    
+    # Module-specific Knowledge Graph
+    path('download-module-kg/<int:module_id>/', views.download_module_kg_csv, name='download_module_kg_csv'),
+    path('upload-module-kg/<int:module_id>/', views.upload_module_kg_csv, name='upload_module_kg_csv'),
+    
+    # Global Knowledge Graph (Legacy)
     path('knowledge-graph/', views.knowledge_graph_view, name='knowledge_graph'),
-    path("upload-knowledge-graph/", views.upload_knowledge_graph, name="upload_knowledge_graph"),
-    path("download-knowledge-graph/", views.download_knowledge_graph_csv, name="download_knowledge_graph"),
-#    path("<str:chat_id>/", views.chatbot_view, name="chat_view"),
- 
-    path("chat/", views.chat_view, name="chat_view"),
-    path("api/chat/", views.chat_api, name="chat_api"),
-    path("api/conversations/", views.get_conversations, name="get_conversations"),
-    path("api/conversations/<int:conversation_id>/", views.load_conversation, name="load_conversation"),
-    path("api/conversations/<int:conversation_id>/delete/", views.delete_conversation, name="delete_conversation"),
-
+    path('download-kg-csv/', views.download_knowledge_graph_csv, name='download_knowledge_graph'),
+    path('upload-kg/', views.upload_knowledge_graph, name='upload_knowledge_graph'),
+    
+    # Chat Interface
+    path('chat/<int:module_id>/', views.chat_view, name='chat_module'),
+    path('chat/api/', views.chat_api, name='chat_api'),
+    
+    # Conversation Management
+    path('conversations/', views.get_conversations, name='get_conversations'),
+    path('conversation/<int:conversation_id>/', views.load_conversation, name='load_conversation'),
+    path('conversation/<int:conversation_id>/delete/', views.delete_conversation, name='delete_conversation'),
 ]
