@@ -85,7 +85,6 @@ def new_module_view(request):
             except Exception as e:
                 logger.error(f"Error auto-generating KG for new module: {str(e)}")
                 logger.error(traceback.format_exc())
-                # Continue anyway - user can generate later
         
         return redirect("edit_module", module_id=module.id)
 
@@ -137,22 +136,18 @@ def edit_module_view(request, module_id):
                 try:
                     from .utils.kg_generator import generate_knowledge_graph_with_llm
                     
-                    # Add detailed logging
                     logger.info(f"Starting KG generation for module '{module.name}' (ID: {module_id})")
                     logger.info(f"Tables to process: {selected_tables}")
                     
-                    # Check if OpenAI key is present
                     import os
                     if not os.environ.get("OPENAI_API_KEY"):
                         logger.warning("No OPENAI_API_KEY found - will use basic generation")
                     
-                    # Generate knowledge graph
                     kg_data = generate_knowledge_graph_with_llm(selected_tables)
                     
                     if not kg_data:
                         raise Exception("Generated knowledge graph is empty")
                     
-                    # Save to module
                     module.knowledge_graph_data = kg_data
                     module.kg_auto_generated = True
                     module.save()
@@ -282,7 +277,7 @@ def edit_module_view(request, module_id):
 @csrf_exempt
 @require_http_methods(["DELETE", "POST"])
 def delete_module_view(request, module_id):
-    """Delete a module - FIXED VERSION"""
+    """Delete a module"""
     user_name = request.session.get("user_name")
     if not user_name:
         return JsonResponse({"error": "Not authenticated"}, status=401)
@@ -291,24 +286,16 @@ def delete_module_view(request, module_id):
         module = Module.objects.get(id=module_id, user_name=user_name)
         module_name = module.name
         
-        # Delete conversations that reference this module in their context
-        conversations_to_delete = Conversation.objects.filter(
-            session_id=request.session.session_key,
-            context__module_id=str(module_id)
-        )
-        deleted_count = conversations_to_delete.count()
-        conversations_to_delete.delete()
-        
-        # Delete the module
+        # Delete all conversations for this module
+        deleted_count = module.conversations.count()
         module.delete()
         
-        logger.info(f"Module '{module_name}' (ID: {module_id}) and {deleted_count} conversations deleted by user '{user_name}'")
+        logger.info(f"Module '{module_name}' (ID: {module_id}) and {deleted_count} conversations deleted")
         return JsonResponse({
             "success": True, 
             "message": f"Module '{module_name}' deleted successfully"
         })
     except Module.DoesNotExist:
-        logger.error(f"Module {module_id} not found for user {user_name}")
         return JsonResponse({"error": "Module not found"}, status=404)
     except Exception as e:
         logger.error(f"Error deleting module {module_id}: {str(e)}", exc_info=True)
@@ -393,7 +380,6 @@ def upload_module_kg_csv(request, module_id):
 
     return redirect('edit_module', module_id=module_id)
 
-
 # ---------- GLOBAL KNOWLEDGE GRAPH (Legacy) ----------
 def knowledge_graph_view(request):
     kg_instance, _ = KnowledgeGraph.objects.get_or_create(id=1)
@@ -431,7 +417,6 @@ def knowledge_graph_view(request):
             except:
                 existing_extra_data = ""
 
-    # Get tables starting with tbl_
     tables = [t for t in connection.introspection.table_names() if t.startswith("tbl_")]
     knowledge_data = {}
 
@@ -445,7 +430,6 @@ def knowledge_graph_view(request):
                 "datatype": existing_info.get("datatype", "")
             }
 
-    # Handle CSV upload
     if request.method == "POST" and "upload_csv" in request.FILES:
         csv_file = request.FILES["upload_csv"]
         decoded_file = csv_file.read().decode("utf-8")
@@ -465,7 +449,6 @@ def knowledge_graph_view(request):
         kg_instance.save()
         return redirect("knowledge_graph")
 
-    # Handle Save All
     if request.method == "POST" and "save_all" in request.POST:
         updated_kg_data = {}
         for key, value in request.POST.items():
@@ -577,7 +560,7 @@ def chat_view(request, module_id):
 
 @csrf_exempt
 def chat_api(request):
-    """Handle chat messages with conversation persistence and chart support"""
+    """Handle chat messages with conversation persistence - FIXED VERSION"""
     if request.method != "POST":
         return JsonResponse({"error": "Method not allowed"}, status=405)
     
@@ -591,27 +574,47 @@ def chat_api(request):
     conversation_id = data.get("conversation_id", None)
     module_id = data.get("module_id", None)
     
+    logger.info(f"📨 Chat API: conv_id={conversation_id}, module_id={module_id}, msg='{user_query[:50] if user_query else ''}', feedback={bool(feedback)}")
+    
     if not user_query and not feedback:
         return JsonResponse({"error": "Empty message"}, status=400)
     
+    if not module_id:
+        return JsonResponse({"error": "Module ID required"}, status=400)
+    
+    # Ensure session exists
     if not request.session.session_key:
         request.session.create()
     session_id = request.session.session_key
     
+    # Get or create conversation
+    conversation = None
     if conversation_id:
         try:
             conversation = Conversation.objects.get(id=conversation_id, session_id=session_id)
+            logger.info(f"✅ Using existing conversation {conversation.id}")
         except Conversation.DoesNotExist:
-            conversation = Conversation.objects.create(session_id=session_id)
-    else:
-        conversation = Conversation.objects.create(session_id=session_id)
+            logger.warning(f"⚠️ Conversation {conversation_id} not found")
+            conversation = None
     
-    if module_id:
-        if not conversation.context:
-            conversation.context = {}
-        conversation.context['module_id'] = module_id
-        conversation.save()
+    # Create new conversation if needed (only for actual messages, not feedback)
+    if not conversation and user_query and not feedback:
+        try:
+            module = Module.objects.get(id=module_id)
+            conversation = Conversation.objects.create(
+                module=module,
+                session_id=session_id,
+                title=user_query[:50] + ('...' if len(user_query) > 50 else '')
+            )
+            logger.info(f"✅ Created NEW conversation {conversation.id}: '{conversation.title}'")
+        except Module.DoesNotExist:
+            return JsonResponse({"error": "Module not found"}, status=404)
     
+    # Error if feedback without conversation
+    if not conversation and feedback:
+        return JsonResponse({"error": "Invalid conversation state"}, status=400)
+    
+    # Session management
     if conversation.id not in SESSION_STORE:
         SESSION_STORE[conversation.id] = {
             "entities": conversation.entities or {},
@@ -619,7 +622,7 @@ def chat_api(request):
             "thread_id": f"conv_{conversation.id}",
             "last_query": None,
             "pending_clarification": conversation.context.get("pending_clarification") if conversation.context else None,
-            "module_id": module_id or (conversation.context.get("module_id") if conversation.context else None)
+            "module_id": module_id
         }
     
     session_data = SESSION_STORE[conversation.id]
@@ -627,8 +630,10 @@ def chat_api(request):
     if module_id:
         session_data["module_id"] = module_id
     
+    # Process request
     try:
         if feedback:
+            # Handle feedback
             entity_type = feedback.get("entity_type")
             feedback_type = feedback.get("type")
             
@@ -663,11 +668,13 @@ def chat_api(request):
             session_data["pending_clarification"] = None
             
         else:
+            # New user message
             user_message = Message.objects.create(
                 conversation=conversation,
                 content=user_query,
                 is_user=True
             )
+            logger.info(f"💾 Saved user message to DB")
             
             session_data["last_query"] = user_query
             from .RAG_LLM.main import invoke_graph
@@ -684,6 +691,7 @@ def chat_api(request):
             if result.get("type") != "clarification":
                 session_data["history"].append(user_query)
         
+        # Save assistant response
         if result.get("type") == "response":
             chart_data = result.get("chart_data")
             Message.objects.create(
@@ -695,7 +703,9 @@ def chat_api(request):
                     "chart": chart_data
                 }
             )
+            logger.info(f"💾 Saved assistant message to DB")
         
+        # Update session entities
         if result.get("entities"):
             for e_type, e_data in result["entities"].items():
                 if isinstance(e_data, dict):
@@ -703,6 +713,7 @@ def chat_api(request):
                 else:
                     session_data["entities"][e_type] = e_data
         
+        # Update conversation
         conversation.entities = session_data["entities"]
         if not conversation.context:
             conversation.context = {}
@@ -712,51 +723,60 @@ def chat_api(request):
             "module_id": session_data.get("module_id")
         })
         
+        # Update title if still "New Chat"
         if conversation.title == "New Chat" and conversation.messages.filter(is_user=True).count() > 0:
             first_message = conversation.get_first_message()
             conversation.title = first_message[:50] + ("..." if len(first_message) > 50 else "")
         
         conversation.save()
+        logger.info(f"💾 Updated conversation {conversation.id}")
+        
+        # Add conversation_id to response
         result["conversation_id"] = conversation.id
         
         return JsonResponse(result)
         
     except Exception as e:
-        logger.error(f"Error in chat_api: {str(e)}", exc_info=True)
+        logger.error(f"❌ Error in chat_api: {str(e)}", exc_info=True)
         return JsonResponse({
             "type": "error",
-            "message": "I encountered an error processing your request. Please try again."
+            "message": "I encountered an error processing your request. Please try again.",
+            "conversation_id": conversation.id if conversation else None
         }, status=500)
 
 
 @csrf_exempt
 def get_conversations(request):
-    """Get list of conversations for sidebar"""
+    """Get list of conversations for sidebar - FIXED VERSION"""
     if request.method != "GET":
         return JsonResponse({"error": "Method not allowed"}, status=405)
     
-    if not request.session.session_key:
-        request.session.create()
-    session_id = request.session.session_key
-    
     module_id = request.GET.get('module_id', None)
-    conversations = Conversation.objects.filter(session_id=session_id)
     
-    if module_id:
-        conversations = conversations.filter(context__module_id=module_id)
+    if not module_id:
+        return JsonResponse({"conversations": []})
     
-    conversations = conversations.order_by('-updated_at')[:50]
-    
-    conv_list = []
-    for conv in conversations:
-        conv_list.append({
-            "id": conv.id,
-            "title": conv.title,
-            "updated_at": conv.updated_at.isoformat(),
-            "message_count": conv.messages.count()
-        })
-    
-    return JsonResponse({"conversations": conv_list})
+    try:
+        # CRITICAL FIX: Filter by module foreign key
+        conversations = Conversation.objects.filter(
+            module_id=module_id
+        ).order_by('-updated_at')[:50]
+        
+        conv_list = []
+        for conv in conversations:
+            conv_list.append({
+                "id": conv.id,
+                "title": conv.title,
+                "updated_at": conv.updated_at.isoformat(),
+                "message_count": conv.messages.count()
+            })
+        
+        logger.info(f"📋 Returning {len(conv_list)} conversations for module {module_id}")
+        return JsonResponse({"conversations": conv_list})
+        
+    except Exception as e:
+        logger.error(f"❌ Error loading conversations: {e}", exc_info=True)
+        return JsonResponse({"conversations": []})
 
 
 @csrf_exempt
@@ -811,6 +831,7 @@ def delete_conversation(request, conversation_id):
         if conversation_id in SESSION_STORE:
             del SESSION_STORE[conversation_id]
         
+        logger.info(f"🗑️ Deleted conversation {conversation_id}")
         return JsonResponse({"success": True})
     except Conversation.DoesNotExist:
         return JsonResponse({"error": "Conversation not found"}, status=404)
