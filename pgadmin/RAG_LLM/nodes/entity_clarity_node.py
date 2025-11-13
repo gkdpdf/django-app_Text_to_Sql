@@ -95,21 +95,50 @@ def shortlist_candidates_with_scores(text, options, k=15, score_cutoff=60):
     return final_matches[:k]
 
 # ==================== LLM PARSING ====================
-def llm_understand(user_query):
-    """Extract intent, metrics, and entities using LLM"""
+def llm_understand(user_query, module_config=None):
+    """Extract intent, metrics, and entities using LLM with module context"""
+    
+    # Build context from module config
+    context_lines = []
+    
+    if module_config:
+        module_name = module_config.get('module_name', 'Database')
+        context_lines.append(f"Module: {module_name}")
+        
+        # Add entity types
+        entity_map = module_config.get('entity_inference_map', {})
+        if entity_map:
+            context_lines.append(f"\nAvailable entity types: {', '.join(entity_map.keys())}")
+        
+        # Add metrics
+        metrics = module_config.get('metrics', {})
+        if metrics:
+            context_lines.append(f"\nAvailable metrics:")
+            for metric_name, metric_desc in list(metrics.items())[:5]:
+                context_lines.append(f"  - {metric_name}: {metric_desc}")
+        
+        # Add RCA context if available
+        rca_context = module_config.get('rca_context', '')
+        if rca_context and len(rca_context) < 500:
+            context_lines.append(f"\nBusiness context:\n{rca_context[:300]}...")
+    
+    context = "\n".join(context_lines)
+    
     prompt = f"""
 You are a business query analyzer.
 
-1. If irrelevant to sales, products, distributors, or superstockists, return {{"intent": "irrelevant"}}.
+{context}
+
+1. If irrelevant to this database, return {{"intent": "irrelevant"}}.
 
 2. If relevant, extract:
    - intent (query|aggregation|ranking|comparison)
-   - metrics (sales, revenue, quantity, etc.)
-   - entities: COMPLETE entity names as dictionary
+   - metrics (from available metrics above, or common ones like sales, revenue, quantity)
+   - entities: COMPLETE entity names as dictionary with entity type as key
 
 Examples:
 - "VH trading" → {{"intent": "query", "entities": {{"distributor": ["VH trading"]}}, "metrics": []}}
-- "takatak" → {{"intent": "query", "entities": {{"product": ["takatak"]}}, "metrics": []}}
+- "bhujia sales" → {{"intent": "query", "entities": {{"product": ["bhujia"]}}, "metrics": ["sales"]}}
 - "sales in may" → {{"intent": "query", "entities": {{}}, "metrics": ["sales"]}}
 
 User query: ```{user_query}```
