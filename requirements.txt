@@ -97,4 +97,5 @@ yarl==1.21.0
 zstandard==0.25.0
 chromadb==1.1.0
 gunicorn
-
+dj-database-url
+whitenoise
