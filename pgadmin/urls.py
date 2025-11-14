@@ -15,7 +15,7 @@ urlpatterns = [
     path('delete-module/<int:module_id>/', views.delete_module_view, name='delete_module'),
     
     # Utility
-    path('get-table-columns/', views.get_table_columns, name='get_table_columns'),
+     path('get-table-columns/', views.get_table_columns, name='get_table_columns'),
     
     # Module-specific Knowledge Graph
     path('download-module-kg/<int:module_id>/', views.download_module_kg_csv, name='download_module_kg_csv'),

@@ -21,39 +21,26 @@
         body {
             font-family: 'Poppins', sans-serif;
             min-height: 100vh;
-            position: relative;
-            overflow-x: hidden;
-        }
-
-        .animated-bg {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
             background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #f5576c);
             background-size: 400% 400%;
             animation: gradient 15s ease infinite;
-            z-index: -2;
-        }
-
-        .main-container {
-            position: relative;
-            z-index: 1;
             padding: 40px;
-            min-height: 100vh;
         }
 
-        h2 {
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
             color: white;
             text-align: center;
             font-size: 2.5em;
-            font-weight: 600;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
             margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
         }
 
-        .welcome-subtitle {
+        .subtitle {
             color: rgba(255, 255, 255, 0.9);
             text-align: center;
             font-size: 1.1em;
@@ -69,32 +56,26 @@
             gap: 20px;
         }
 
-        .welcome-section {
-            flex: 1;
-        }
-
         .new-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 12px 25px;
+            background: white;
+            color: #667eea;
+            padding: 12px 30px;
             border-radius: 15px;
-            color: white;
             text-decoration: none;
-            font-weight: 500;
+            font-weight: 600;
             transition: all 0.3s ease;
-            display: inline-block;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         }
 
         .new-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
         }
 
         .modules {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 25px;
-            margin-top: 30px;
         }
 
         .module-card {
@@ -169,14 +150,14 @@
             transform: scale(1.1);
         }
 
-        .tables {
+        .tables-info {
             font-size: 0.95em;
             color: #555;
             margin-bottom: 20px;
             line-height: 1.5;
         }
 
-        .tables strong {
+        .tables-info strong {
             color: #764ba2;
             font-weight: 600;
         }
@@ -212,7 +193,7 @@
             color: white;
             font-size: 1.2em;
             margin-top: 100px;
-            padding: 40px;
+            padding: 60px 40px;
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
             border-radius: 20px;
@@ -221,80 +202,21 @@
             margin-right: auto;
         }
 
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(5px);
-        }
-
-        .modal-content {
-            background: white;
-            margin: 15% auto;
-            padding: 30px;
-            border-radius: 20px;
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-        }
-
-        .modal-icon {
-            font-size: 3em;
-            margin-bottom: 15px;
-        }
-
-        .modal-title {
-            font-size: 1.5em;
-            color: #333;
-            margin-bottom: 10px;
-        }
-
-        .modal-text {
-            color: #666;
-            margin-bottom: 25px;
-        }
-
-        .modal-buttons {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-        }
-
-        .modal-btn {
-            padding: 10px 25px;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            font-size: 1em;
-        }
-
-        .modal-btn-cancel {
-            background: #f0f0f0;
-            color: #333;
-        }
-
-        .modal-btn-delete {
-            background: linear-gradient(135deg, #f5576c 0%, #d4455a 100%);
+        .error-message {
+            background: rgba(255, 87, 108, 0.9);
             color: white;
-        }
-
-        .modal-btn:hover {
-            transform: translateY(-2px);
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(255, 87, 108, 0.3);
         }
 
         @media (max-width: 768px) {
-            .main-container {
+            body {
                 padding: 20px;
             }
-            h2 {
+            h1 {
                 font-size: 2em;
             }
             .modules {
@@ -304,18 +226,23 @@
     </style>
 </head>
 <body>
-    <div class="animated-bg"></div>
-    <div class="main-container">
+    <div class="container">
         <div class="top-bar">
-            <div class="welcome-section">
-                <h2>Welcome, {{ user_name|title }}!</h2>
-                <p class="welcome-subtitle">Manage your PostgreSQL modules with ease</p>
+            <div>
+                <h1>Welcome, {{ user_name|title }}! 👋</h1>
+                <p class="subtitle">Manage your PostgreSQL modules with ease</p>
             </div>
             <a href="{% url 'new_module' %}" class="new-btn">+ Create New Module</a>
         </div>
 
-        <div class="modules">
-            {% if modules %}
+        {% if error %}
+            <div class="error-message">
+                ⚠️ {{ error }}
+            </div>
+        {% endif %}
+
+        {% if modules %}
+            <div class="modules">
                 {% for module in modules %}
                     <div class="module-card">
                         <div class="module-header">
@@ -324,13 +251,17 @@
                                     📊 {{ module.name }}
                                 </a>
                             </div>
-                            <button class="delete-btn" onclick="confirmDelete({{ module.id }}, '{{ module.name|escapejs }}')" title="Delete Module">
-                                🗑️
+                            <button class="delete-btn" onclick="deleteModule({{ module.id }}, '{{ module.name|escapejs }}')" title="Delete Module">
+                                ×
                             </button>
                         </div>
-                        <div class="tables">
+                        <div class="tables-info">
                             <strong>📁 Tables:</strong><br>
-                            {{ module.tables|join:", "|default:"No tables selected" }}
+                            {% if module.tables and module.tables|length > 0 %}
+                                {{ module.tables|length }} table{{ module.tables|length|pluralize }} selected
+                            {% else %}
+                                <em>No tables selected</em>
+                            {% endif %}
                         </div>
                         <div class="button-group">
                             <a href="{% url 'edit_module' module.id %}" class="button">✏️ Edit</a>
@@ -338,30 +269,16 @@
                         </div>
                     </div>
                 {% endfor %}
-            {% else %}
-                <div class="no-modules">
-                    <p>🚀 No modules created yet.</p>
-                    <p>Click "+ Create New Module" to start building your first module!</p>
-                </div>
-            {% endif %}
-        </div>
-    </div>
-
-    <div id="deleteModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-icon">⚠️</div>
-            <h3 class="modal-title">Delete Module?</h3>
-            <p class="modal-text">Are you sure you want to delete "<strong id="moduleNameText"></strong>"? This action cannot be undone.</p>
-            <div class="modal-buttons">
-                <button class="modal-btn modal-btn-cancel" onclick="closeDeleteModal()">Cancel</button>
-                <button class="modal-btn modal-btn-delete" onclick="deleteModule()">Delete</button>
             </div>
-        </div>
+        {% else %}
+            <div class="no-modules">
+                <p>🚀 No modules created yet.</p>
+                <p>Click "+ Create New Module" to start building your first module!</p>
+            </div>
+        {% endif %}
     </div>
 
     <script>
-        let moduleToDelete = null;
-
         function getCookie(name) {
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
@@ -377,24 +294,15 @@
             return cookieValue;
         }
 
-        function confirmDelete(moduleId, moduleName) {
-            moduleToDelete = moduleId;
-            document.getElementById('moduleNameText').textContent = moduleName;
-            document.getElementById('deleteModal').style.display = 'block';
-        }
-
-        function closeDeleteModal() {
-            document.getElementById('deleteModal').style.display = 'none';
-            moduleToDelete = null;
-        }
-
-        async function deleteModule() {
-            if (!moduleToDelete) return;
+        async function deleteModule(moduleId, moduleName) {
+            if (!confirm(`Are you sure you want to delete "${moduleName}"?\n\nThis action cannot be undone.`)) {
+                return;
+            }
 
             const csrftoken = getCookie('csrftoken');
 
             try {
-                const response = await fetch(`/delete-module/${moduleToDelete}/`, {
+                const response = await fetch(`/delete-module/${moduleId}/`, {
                     method: 'DELETE',
                     headers: {
                         'X-CSRFToken': csrftoken,
@@ -406,31 +314,15 @@
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    closeDeleteModal();
-                    window.location.reload();
+                    location.reload();
                 } else {
                     alert('Error: ' + (data.error || 'Unknown error'));
-                    closeDeleteModal();
                 }
             } catch (error) {
                 console.error('Error:', error);
                 alert('Failed to delete module. Please try again.');
-                closeDeleteModal();
             }
         }
-
-        window.onclick = function(event) {
-            const modal = document.getElementById('deleteModal');
-            if (event.target == modal) {
-                closeDeleteModal();
-            }
-        }
-
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape') {
-                closeDeleteModal();
-            }
-        });
     </script>
 </body>
 </html>
