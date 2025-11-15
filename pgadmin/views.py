@@ -329,8 +329,6 @@ def edit_module_view(request, module_id):
                 return JsonResponse({"success": False, "error": error_msg}, status=500)
         
         elif action == "save_all":
-            # ===== CRITICAL FIX: Preserve existing KG data when saving manually =====
-            
             # Update table selections
             selected_tables = request.POST.getlist("selected_tables")
             module.tables = selected_tables if selected_tables else []
@@ -361,16 +359,12 @@ def edit_module_view(request, module_id):
                             kg_data_from_form[table][column] = {}
                         kg_data_from_form[table][column]["datatype"] = value.strip()
             
-            # ===== MERGE: Combine form data with existing data =====
-            # Start with existing data
+            # Merge with existing data
             merged_kg_data = existing_kg_data.copy()
-            
-            # Update with form data (only for selected tables)
             for table in selected_tables:
                 if table in kg_data_from_form:
                     if table not in merged_kg_data:
                         merged_kg_data[table] = {}
-                    # Update columns from form
                     for column, data in kg_data_from_form[table].items():
                         merged_kg_data[table][column] = data
             
@@ -381,6 +375,26 @@ def edit_module_view(request, module_id):
             
             module.knowledge_graph_data = merged_kg_data
             logger.info(f"💾 Saved manual edits for {len(merged_kg_data)} tables")
+            
+            # ========== Save Relationships (NEW) ==========
+            relationships_list = []
+            rel_left_tables = request.POST.getlist("rel_left_table")
+            rel_left_columns = request.POST.getlist("rel_left_column")
+            rel_types = request.POST.getlist("rel_type")
+            rel_right_tables = request.POST.getlist("rel_right_table")
+            rel_right_columns = request.POST.getlist("rel_right_column")
+            
+            for i in range(len(rel_left_tables)):
+                if rel_left_tables[i] and rel_right_tables[i]:
+                    relationships_list.append({
+                        "left_table": rel_left_tables[i],
+                        "left_column": rel_left_columns[i] if i < len(rel_left_columns) else "",
+                        "type": rel_types[i] if i < len(rel_types) else "one-to-many",
+                        "right_table": rel_right_tables[i],
+                        "right_column": rel_right_columns[i] if i < len(rel_right_columns) else ""
+                    })
+            module.relationships = relationships_list
+            logger.info(f"💾 Saved {len(relationships_list)} relationships")
             
             # Save RCAs
             rca_list = []
@@ -421,7 +435,6 @@ def edit_module_view(request, module_id):
             module.save()
             logger.info(f"✅ Saved all module data for '{module.name}'")
             return redirect("dashboard")
-
     # ===== GET REQUEST: Prepare data for display =====
     knowledge_data = {}
     if module.tables:
@@ -448,6 +461,7 @@ def edit_module_view(request, module_id):
         "tables": tables,
         "selected_tables": selected_tables,
         "knowledge_data": knowledge_data,
+        "relationships": module.relationships or [],  # ← NEW
         "rca_list": module.rca_list or [],
         "pos_tagging": module.pos_tagging or [],
         "metrics_data": module.metrics_data or {},

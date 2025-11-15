@@ -1,180 +1,186 @@
 """
-Dynamic Module Configuration Loader - NO HARDCODING
+Django Model Loader for LangGraph
+Loads module configuration from Django models
 """
-from django.apps import apps
-from django.db import connection
-import logging
 import os
+import sys
+import django
 
-logger = logging.getLogger(__name__)
+# Setup Django
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, project_root)
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mysite.settings')
+django.setup()
 
-def load_module_config(module_id: int):
-    """Load complete module configuration"""
+from django.conf import settings
+
+
+def get_db_credentials():
+    """Get database credentials from Django settings"""
+    db_config = settings.DATABASES['default']
+    
+    return {
+        'host': db_config.get('HOST', 'localhost'),
+        'database': db_config['NAME'],
+        'user': db_config['USER'],
+        'password': db_config['PASSWORD'],
+        'port': db_config.get('PORT', 5432)
+    }
+
+
+def load_module_config(module_id):
+    """
+    Load complete module configuration including:
+    - Tables
+    - Knowledge Graph (column descriptions)
+    - Relationships (table joins)
+    - Metrics
+    - RCA (business context)
+    - POS Tagging (entity types)
+    - Extra Suggestions
+    """
+    from pgadmin.models import Module
+    
     try:
-        Module = apps.get_model('pgadmin', 'Module')
         module = Module.objects.get(id=module_id)
+    except Module.DoesNotExist:
+        raise ValueError(f"Module {module_id} not found")
+    
+    # Build annotated schema from knowledge graph
+    annotated_schema = build_annotated_schema(module.knowledge_graph_data)
+    
+    # Build relationships string for SQL context
+    relationships_text = build_relationships_text(module.relationships)
+    
+    # Build entity inference map from POS tagging
+    entity_inference_map = build_entity_map(module.pos_tagging)
+    
+    # Build RCA context
+    rca_context = build_rca_context(module.rca_list)
+    
+    config = {
+        'module_id': module.id,
+        'module_name': module.name,
+        'tables': module.tables or [],
+        'knowledge_graph_data': module.knowledge_graph_data or {},
+        'relationships': module.relationships or [],
+        'metrics': module.metrics_data or {},
+        'rca_list': module.rca_list or [],
+        'pos_tagging': module.pos_tagging or [],
+        'extra_suggestions': module.extra_suggestions or '',
         
-        tables = module.tables or []
-        if not tables:
-            raise ValueError("No tables selected")
+        # Processed/formatted data for LLM
+        'annotated_schema': annotated_schema,
+        'relationships_text': relationships_text,
+        'entity_inference_map': entity_inference_map,
+        'rca_context': rca_context,
         
-        logger.info(f"📦 Loading: {module.name}")
-        
-        # Build schema
-        annotated_schema = build_annotated_schema(
-            module.knowledge_graph_data or {}, 
-            tables,
-            module.name
-        )
-        
-        # Build relationships
-        relationships = build_relationships(tables)
-        
-        # Build entity map
-        entity_map = build_entity_inference_map(
-            module.knowledge_graph_data or {},
-            tables,
-            module.pos_tagging or []
-        )
-        
-        # Get metrics
-        metrics = module.metrics_data or {}
-        
-        # Get RCAs
-        rca_context = ""
-        if module.rca_list:
-            rca_parts = []
-            for rca in module.rca_list:
-                title = rca.get('title', '')
-                content = rca.get('content', '')
-                if title and content:
-                    rca_parts.append(f"**{title}**\n{content}")
-            rca_context = "\n\n".join(rca_parts)
-        
-        logger.info(f"✅ Loaded: {len(entity_map)} entity types")
-        
-        return {
-            "module_id": module_id,
-            "module_name": module.name,
-            "tables": tables,
-            "annotated_schema": annotated_schema,
-            "relationships": relationships,
-            "entity_inference_map": entity_map,
-            "metrics": metrics,
-            "rca_context": rca_context,
-            "extra_context": module.extra_suggestions or "",
-            "knowledge_graph": module.knowledge_graph_data or {}
-        }
-        
-    except Exception as e:
-        logger.error(f"❌ Error loading module: {e}", exc_info=True)
-        raise
+        # Metadata
+        'created_at': module.created_at.isoformat(),
+        'kg_auto_generated': module.kg_auto_generated,
+    }
+    
+    return config
 
 
-def build_annotated_schema(kg: dict, tables: list, name: str) -> str:
-    """Build schema documentation"""
-    if not kg:
-        return f"# {name}\n\nNo schema available."
+def build_annotated_schema(knowledge_graph_data):
+    """
+    Build annotated schema text from knowledge graph
     
-    lines = [f"# {name} - Schema", f"\n{len(tables)} tables.\n"]
+    Format:
+    Table: customers
+      - customer_id (identifier): Unique customer identifier
+      - customer_name (text): Full name of the customer
+      - email (text): Customer email address
+    """
+    if not knowledge_graph_data:
+        return "No schema annotations available."
     
-    for table in tables:
-        if table not in kg:
-            continue
-        
-        lines.append(f"\n## {table}\n")
-        
-        for col, info in kg.get(table, {}).items():
+    lines = []
+    for table, columns in knowledge_graph_data.items():
+        lines.append(f"\nTable: {table}")
+        for column, info in columns.items():
             desc = info.get('desc', 'No description')
-            dtype = info.get('datatype', 'Text')
-            lines.append(f"- **{col}** ({dtype}): {desc}")
+            datatype = info.get('datatype', 'unknown')
+            lines.append(f"  - {column} ({datatype}): {desc}")
     
     return "\n".join(lines)
 
 
-def build_relationships(tables: list) -> str:
-    """Build relationships"""
-    lines = ["# Relationships\n"]
+def build_relationships_text(relationships):
+    """
+    Build relationships text for SQL JOIN context
     
-    with connection.cursor() as cursor:
-        for table in tables:
-            try:
-                cursor.execute("""
-                    SELECT kcu.column_name, ccu.table_name, ccu.column_name
-                    FROM information_schema.table_constraints AS tc
-                    JOIN information_schema.key_column_usage AS kcu
-                        ON tc.constraint_name = kcu.constraint_name
-                    JOIN information_schema.constraint_column_usage AS ccu
-                        ON ccu.constraint_name = tc.constraint_name
-                    WHERE tc.constraint_type = 'FOREIGN KEY'
-                        AND tc.table_name = %s
-                """, [table])
-                
-                fks = cursor.fetchall()
-                if fks:
-                    lines.append(f"\n## {table}")
-                    for fk in fks:
-                        lines.append(f"- `{fk[0]}` → `{fk[1]}.{fk[2]}`")
-            except:
-                pass
+    Format:
+    - customers.customer_id (1:N) orders.customer_id
+    - orders.product_id (N:1) products.product_id
+    """
+    if not relationships:
+        return "No relationships defined."
     
-    return "\n".join(lines)
+    lines = []
+    for rel in relationships:
+        left = f"{rel['left_table']}.{rel['left_column']}"
+        right = f"{rel['right_table']}.{rel['right_column']}"
+        rel_type = rel.get('type', 'one-to-many')
+        
+        # Format relationship type
+        type_map = {
+            'one-to-one': '1:1',
+            'one-to-many': '1:N',
+            'many-to-one': 'N:1',
+            'many-to-many': 'N:N'
+        }
+        type_symbol = type_map.get(rel_type, '1:N')
+        
+        lines.append(f"  - {left} ({type_symbol}) {right}")
+    
+    return "Relationships:\n" + "\n".join(lines) if lines else "No relationships defined."
 
 
-def build_entity_inference_map(kg: dict, tables: list, pos_tagging: list) -> dict:
-    """Build entity type mapping"""
+def build_entity_map(pos_tagging):
+    """
+    Build entity inference map from POS tagging
+    
+    Returns dict: {entity_type: (column, table)}
+    """
     entity_map = {}
     
-    # Use POS tagging
     for pos in pos_tagging:
-        entity_type = pos.get('name', '').strip().lower()
-        reference = pos.get('reference', '').strip()
+        entity_name = pos.get('name', '').lower()
+        reference = pos.get('reference', '')
         
-        if not entity_type or not reference:
-            continue
-        
-        if '.' in reference:
-            parts = reference.split('.', 1)
-            table, column = parts[0], parts[1]
-            if table in tables:
-                entity_map[entity_type] = (column, table)
-        else:
-            for table in tables:
-                if table in kg and reference in kg[table]:
-                    entity_map[entity_type] = (reference, table)
-                    break
-    
-    # Infer from descriptions
-    if kg:
-        for table in tables:
-            if table not in kg:
-                continue
-            
-            for col, info in kg[table].items():
-                desc = info.get('desc', '').lower()
-                
-                if ('product' in desc or 'item' in desc) and 'product' not in entity_map:
-                    entity_map['product'] = (col, table)
-                
-                if any(w in desc for w in ['distributor', 'dealer']) and 'distributor' not in entity_map:
-                    entity_map['distributor'] = (col, table)
-                
-                if 'customer' in desc and 'customer' not in entity_map:
-                    entity_map['customer'] = (col, table)
+        if entity_name and reference:
+            # Try to extract column/table from reference
+            # Format could be: "product_name column" or "tbl_products.product_name"
+            if '.' in reference:
+                parts = reference.split('.')
+                if len(parts) == 2:
+                    entity_map[entity_name] = (parts[1], parts[0])
+            else:
+                # Just column name, will infer table later
+                entity_map[entity_name] = (entity_name, None)
     
     return entity_map
 
 
-def get_db_credentials():
-    """Get DB credentials from Django"""
-    from django.conf import settings
+def build_rca_context(rca_list):
+    """
+    Build RCA context text for business understanding
     
-    db = settings.DATABASES.get('default', {})
+    Format:
+    Business Context:
+    1. [Title]: [Content]
+    2. [Title]: [Content]
+    """
+    if not rca_list:
+        return ""
     
-    return {
-        'host': db.get('HOST') or os.getenv('PG_HOST', 'localhost'),
-        'database': db.get('NAME') or os.getenv('PG_DBNAME', 'postgres'),
-        'user': db.get('USER') or os.getenv('PG_USER', 'postgres'),
-        'password': db.get('PASSWORD') or os.getenv('PG_PASSWORD', ''),
-        'port': db.get('PORT', 5432)
-    }
+    lines = ["Business Context:"]
+    for i, rca in enumerate(rca_list, 1):
+        title = rca.get('title', 'Untitled')
+        content = rca.get('content', '')
+        if title and content:
+            lines.append(f"{i}. {title}: {content}")
+    
+    return "\n".join(lines) if len(lines) > 1 else ""

@@ -350,10 +350,10 @@ def invoke_graph(user_query: str, session_data: dict, human_feedback: dict = Non
             "catalog": catalog,
             "table_columns": table_columns,
             "annotated_schema": config['annotated_schema'],
-            "relationships": config['relationships'],
+            "relationships": config['relationships_text'],  # ← formatted text
             "session_entities": session_data.get("entities", {}),
             "query_history": session_data.get("history", []),
-            "module_config": config,
+            "module_config": config,  # ← FULL config with all data
         }
         
         if human_feedback:

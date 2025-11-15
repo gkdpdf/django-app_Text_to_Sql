@@ -1,6 +1,12 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from typing import Any, Dict, TypedDict, Optional, List
+import sys
+import os
+
+# Add parent directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 class GraphState(TypedDict, total=False):
     user_query: str
@@ -21,6 +27,7 @@ class GraphState(TypedDict, total=False):
     reasoning_trace: List[str]
     module_config: Optional[Dict[str, Any]]
 
+
 def sql_executor_node(state: GraphState):
     """Execute SQL - Using connection from module config (DYNAMIC)"""
     validated_sql = state.get("validated_sql", "")
@@ -36,8 +43,11 @@ def sql_executor_node(state: GraphState):
         }
     
     try:
-        # Get connection from main.py's pool
-        from .main import get_db_connection, put_db_connection
+        # Import here to avoid circular imports
+        import importlib
+        main_module = importlib.import_module('pgadmin.RAG_LLM.main')
+        get_db_connection = main_module.get_db_connection
+        put_db_connection = main_module.put_db_connection
         
         module_id = module_config.get("module_id")
         if not module_id:
@@ -73,6 +83,8 @@ def sql_executor_node(state: GraphState):
         
     except Exception as e:
         print(f"❌ Execution error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {
             "execution_result": None,
             "execution_status": "failed",

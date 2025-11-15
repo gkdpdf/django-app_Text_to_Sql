@@ -10,6 +10,7 @@ class Module(models.Model):
     name = models.CharField(max_length=255, validators=[MinLengthValidator(1)])
     tables = models.JSONField(default=list, blank=True)
     knowledge_graph_data = models.JSONField(default=dict, blank=True)
+    relationships = models.JSONField(default=list, blank=True)  # ← NEW FIELD
     rca_list = models.JSONField(default=list, blank=True)
     pos_tagging = models.JSONField(default=list, blank=True)
     metrics_data = models.JSONField(default=dict, blank=True)
@@ -34,6 +35,8 @@ class Module(models.Model):
             self.tables = []
         if not isinstance(self.knowledge_graph_data, dict):
             self.knowledge_graph_data = {}
+        if not isinstance(self.relationships, list):  # ← NEW
+            self.relationships = []
         if not isinstance(self.rca_list, list):
             self.rca_list = []
         if not isinstance(self.pos_tagging, list):
