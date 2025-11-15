@@ -26,6 +26,12 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-abc123xyz!@#randomtex
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 ALLOWED_HOSTS = ['.onrender.com','localhost','127.0.0.1']
 

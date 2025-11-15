@@ -45,8 +45,30 @@ def dashboard_view(request):
     if not user_name:
         return redirect("login")
 
-    modules = Module.objects.filter(user_name=user_name).order_by("-created_at")
-    return render(request, "dashboard.html", {"modules": modules, "user_name": user_name})
+    try:
+        modules = Module.objects.filter(user_name=user_name).order_by("-created_at")
+        
+        # Force evaluation to catch any serialization errors
+        modules_list = []
+        for module in modules:
+            # Ensure all JSON fields are valid
+            if not isinstance(module.tables, list):
+                module.tables = []
+                module.save()
+            modules_list.append(module)
+        
+        return render(request, "dashboard.html", {
+            "modules": modules_list,
+            "user_name": user_name
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error in dashboard_view: {str(e)}", exc_info=True)
+        return render(request, "dashboard.html", {
+            "modules": [],
+            "user_name": user_name,
+            "error": "Error loading modules. Please try refreshing the page."
+        })
 
 
 # ---------- CREATE NEW MODULE ----------
@@ -78,7 +100,7 @@ def new_module_view(request):
             try:
                 from .utils.kg_generator import generate_knowledge_graph_with_llm
                 logger.info(f"Auto-generating KG for new module '{module_name}' with tables: {selected_tables}")
-                module.knowledge_graph_data = generate_knowledge_graph_with_llm(selected_tables)
+                module.knowledge_graph_data = generate_knowledge_graph_with_llm(selected_tables, selected_columns)
                 module.kg_auto_generated = True
                 module.save()
                 logger.info(f"Successfully generated KG for module '{module_name}'")
@@ -130,75 +152,249 @@ def edit_module_view(request, module_id):
         action = request.POST.get("action", "save_all")
         
         if action == "generate_kg":
-            # Auto-generate knowledge graph using LLM
-            selected_tables = module.tables or []
-            if selected_tables:
-                try:
-                    from .utils.kg_generator import generate_knowledge_graph_with_llm
-                    
-                    logger.info(f"Starting KG generation for module '{module.name}' (ID: {module_id})")
-                    logger.info(f"Tables to process: {selected_tables}")
-                    
-                    import os
-                    if not os.environ.get("OPENAI_API_KEY"):
-                        logger.warning("No OPENAI_API_KEY found - will use basic generation")
-                    
-                    kg_data = generate_knowledge_graph_with_llm(selected_tables)
-                    
-                    if not kg_data:
-                        raise Exception("Generated knowledge graph is empty")
-                    
-                    module.knowledge_graph_data = kg_data
-                    module.kg_auto_generated = True
-                    module.save()
-                    
-                    logger.info(f"Successfully generated KG with {len(kg_data)} tables")
-                    
-                    return JsonResponse({
-                        "success": True, 
-                        "message": f"Knowledge graph generated successfully for {len(kg_data)} tables"
-                    })
-                    
-                except ImportError as e:
-                    error_msg = f"Import error: {str(e)}"
-                    logger.error(error_msg)
-                    logger.error(traceback.format_exc())
-                    return JsonResponse({"success": False, "error": error_msg}, status=500)
-                    
-                except Exception as e:
-                    error_msg = str(e)
-                    logger.error(f"Error generating KG: {error_msg}")
-                    logger.error(traceback.format_exc())
-                    return JsonResponse({"success": False, "error": error_msg}, status=500)
+            # Read from POST request
+            selected_tables_from_form = request.POST.getlist("selected_tables")
+            selected_columns_json = request.POST.get("selected_columns", "{}")
             
-            return JsonResponse({"success": False, "error": "No tables selected"}, status=400)
+            try:
+                selected_columns = json.loads(selected_columns_json)
+            except json.JSONDecodeError:
+                selected_columns = {}
+            
+            # Validate we have data
+            if not selected_tables_from_form:
+                return JsonResponse({
+                    "success": False, 
+                    "error": "No tables selected. Please select at least one table."
+                }, status=400)
+            
+            # Validate columns
+            tables_without_columns = [t for t in selected_tables_from_form if not selected_columns.get(t)]
+            if tables_without_columns:
+                return JsonResponse({
+                    "success": False,
+                    "error": f"Please select columns for: {', '.join(tables_without_columns)}"
+                }, status=400)
+            
+            logger.info(f"=== AI GENERATION REQUEST ===")
+            logger.info(f"Module: {module.name} (ID: {module_id})")
+            logger.info(f"Tables: {selected_tables_from_form}")
+            logger.info(f"Selected columns: {selected_columns}")
+            logger.info(f"===============================")
+            
+            try:
+                from .utils.kg_generator import generate_knowledge_graph_with_llm
+                
+                # Check API key
+                import os
+                if not os.environ.get("OPENAI_API_KEY"):
+                    return JsonResponse({
+                        "success": False,
+                        "error": "OpenAI API key not configured. Please set OPENAI_API_KEY environment variable."
+                    }, status=500)
+                
+                # ===== SMART GENERATION: Only generate for blank/missing fields =====
+                existing_kg_data = module.knowledge_graph_data if isinstance(module.knowledge_graph_data, dict) else {}
+                
+                logger.info(f"Existing KG data has {len(existing_kg_data)} tables")
+                
+                # Identify which columns need generation (blank or missing)
+                columns_needing_generation = {}
+                
+                for table in selected_tables_from_form:
+                    table_columns = selected_columns.get(table, [])
+                    columns_to_generate = []
+                    
+                    for column in table_columns:
+                        needs_generation = False
+                        
+                        # Check if table doesn't exist
+                        if table not in existing_kg_data:
+                            needs_generation = True
+                            logger.info(f"  - {table}.{column}: TABLE NEW, needs generation")
+                        # Check if column doesn't exist in table
+                        elif column not in existing_kg_data[table]:
+                            needs_generation = True
+                            logger.info(f"  - {table}.{column}: COLUMN NEW, needs generation")
+                        else:
+                            # Column exists - check if description or datatype is blank
+                            existing_col_data = existing_kg_data[table][column]
+                            desc = existing_col_data.get('desc', '').strip()
+                            datatype = existing_col_data.get('datatype', '').strip()
+                            
+                            if not desc or not datatype:
+                                needs_generation = True
+                                logger.info(f"  - {table}.{column}: BLANK FIELDS (desc={bool(desc)}, type={bool(datatype)}), needs generation")
+                            else:
+                                logger.info(f"  - {table}.{column}: ALREADY FILLED, will preserve")
+                        
+                        if needs_generation:
+                            columns_to_generate.append(column)
+                    
+                    if columns_to_generate:
+                        columns_needing_generation[table] = columns_to_generate
+                
+                if not columns_needing_generation:
+                    logger.info("✅ All fields already filled - nothing to generate")
+                    return JsonResponse({
+                        "success": True,
+                        "message": "✅ All fields are already filled! No generation needed.",
+                        "tables_processed": 0,
+                        "columns_generated": 0
+                    })
+                
+                # Log what we're generating
+                total_columns = sum(len(cols) for cols in columns_needing_generation.values())
+                logger.info(f"📝 Will generate {total_columns} column(s) across {len(columns_needing_generation)} table(s)")
+                for table, cols in columns_needing_generation.items():
+                    logger.info(f"   {table}: {cols}")
+                
+                # Generate KG only for needed columns
+                new_kg_data = generate_knowledge_graph_with_llm(
+                    list(columns_needing_generation.keys()), 
+                    columns_needing_generation
+                )
+                
+                if not new_kg_data:
+                    raise Exception("Generated knowledge graph is empty")
+                
+                logger.info(f"✅ AI generated data for {len(new_kg_data)} tables")
+                
+                # ===== MERGE: Preserve all existing data, only add new fields =====
+                merged_kg_data = existing_kg_data.copy()
+                
+                columns_generated = 0
+                columns_preserved = 0
+                
+                # Process all selected tables
+                for table in selected_tables_from_form:
+                    if table not in merged_kg_data:
+                        merged_kg_data[table] = {}
+                    
+                    table_columns = selected_columns.get(table, [])
+                    
+                    for column in table_columns:
+                        if table in new_kg_data and column in new_kg_data[table]:
+                            # We generated this column - add/update it
+                            merged_kg_data[table][column] = new_kg_data[table][column]
+                            columns_generated += 1
+                            logger.info(f"  ✅ Generated: {table}.{column}")
+                        elif column in merged_kg_data[table]:
+                            # Column already exists with data - preserve it (DO NOTHING)
+                            columns_preserved += 1
+                            # Don't log to reduce noise
+                        else:
+                            # New column but wasn't in generation list (shouldn't happen)
+                            merged_kg_data[table][column] = {
+                                "desc": "",
+                                "datatype": ""
+                            }
+                            logger.warning(f"  ⚠️ Column {table}.{column} not generated, creating blank")
+                
+                # Remove tables that are no longer selected
+                tables_to_remove = [t for t in list(merged_kg_data.keys()) if t not in selected_tables_from_form]
+                for table in tables_to_remove:
+                    del merged_kg_data[table]
+                    logger.info(f"  🗑️ Removed deselected table: {table}")
+                
+                # ===== CRITICAL: Don't clear table selections! =====
+                # Only update tables list if it's different
+                if set(module.tables or []) != set(selected_tables_from_form):
+                    module.tables = selected_tables_from_form
+                    logger.info(f"Updated table selections")
+                
+                # Update module with merged data
+                module.knowledge_graph_data = merged_kg_data
+                module.kg_auto_generated = True
+                module.save()
+                
+                logger.info(f"💾 Saved: {columns_generated} generated, {columns_preserved} preserved")
+                
+                return JsonResponse({
+                    "success": True, 
+                    "message": f"✅ Generated {columns_generated} field(s)! {columns_preserved} existing field(s) preserved.",
+                    "columns_generated": columns_generated,
+                    "columns_preserved": columns_preserved
+                })
+                
+            except ImportError as e:
+                error_msg = f"Import error: {str(e)}. Please ensure kg_generator module is available."
+                logger.error(error_msg)
+                return JsonResponse({"success": False, "error": error_msg}, status=500)
+                
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(f"❌ Error generating KG: {error_msg}")
+                logger.error(traceback.format_exc())
+                return JsonResponse({"success": False, "error": error_msg}, status=500)
         
         elif action == "save_all":
             # Update table selections
             selected_tables = request.POST.getlist("selected_tables")
-            if selected_tables:
-                module.tables = selected_tables
+            module.tables = selected_tables if selected_tables else []
             
-            # Save Knowledge Graph
-            kg_data = {}
+            # Get existing KG data
+            existing_kg_data = module.knowledge_graph_data if isinstance(module.knowledge_graph_data, dict) else {}
+            
+            # Parse form data for knowledge graph
+            kg_data_from_form = {}
             for key, value in request.POST.items():
                 if key.startswith("kg_desc__"):
-                    _, table, column = key.split("__", 2)
-                    if table not in kg_data:
-                        kg_data[table] = {}
-                    if column not in kg_data[table]:
-                        kg_data[table][column] = {}
-                    kg_data[table][column]["desc"] = value
+                    parts = key.split("__", 2)
+                    if len(parts) == 3:
+                        _, table, column = parts
+                        if table not in kg_data_from_form:
+                            kg_data_from_form[table] = {}
+                        if column not in kg_data_from_form[table]:
+                            kg_data_from_form[table][column] = {}
+                        kg_data_from_form[table][column]["desc"] = value.strip()
+                        
                 elif key.startswith("kg_datatype__"):
-                    _, table, column = key.split("__", 2)
-                    if table not in kg_data:
-                        kg_data[table] = {}
-                    if column not in kg_data[table]:
-                        kg_data[table][column] = {}
-                    kg_data[table][column]["datatype"] = value
+                    parts = key.split("__", 2)
+                    if len(parts) == 3:
+                        _, table, column = parts
+                        if table not in kg_data_from_form:
+                            kg_data_from_form[table] = {}
+                        if column not in kg_data_from_form[table]:
+                            kg_data_from_form[table][column] = {}
+                        kg_data_from_form[table][column]["datatype"] = value.strip()
             
-            if kg_data:
-                module.knowledge_graph_data = kg_data
+            # Merge with existing data
+            merged_kg_data = existing_kg_data.copy()
+            for table in selected_tables:
+                if table in kg_data_from_form:
+                    if table not in merged_kg_data:
+                        merged_kg_data[table] = {}
+                    for column, data in kg_data_from_form[table].items():
+                        merged_kg_data[table][column] = data
+            
+            # Remove deselected tables
+            tables_to_remove = [t for t in list(merged_kg_data.keys()) if t not in selected_tables]
+            for table in tables_to_remove:
+                del merged_kg_data[table]
+            
+            module.knowledge_graph_data = merged_kg_data
+            logger.info(f"💾 Saved manual edits for {len(merged_kg_data)} tables")
+            
+            # ========== Save Relationships (NEW) ==========
+            relationships_list = []
+            rel_left_tables = request.POST.getlist("rel_left_table")
+            rel_left_columns = request.POST.getlist("rel_left_column")
+            rel_types = request.POST.getlist("rel_type")
+            rel_right_tables = request.POST.getlist("rel_right_table")
+            rel_right_columns = request.POST.getlist("rel_right_column")
+            
+            for i in range(len(rel_left_tables)):
+                if rel_left_tables[i] and rel_right_tables[i]:
+                    relationships_list.append({
+                        "left_table": rel_left_tables[i],
+                        "left_column": rel_left_columns[i] if i < len(rel_left_columns) else "",
+                        "type": rel_types[i] if i < len(rel_types) else "one-to-many",
+                        "right_table": rel_right_tables[i],
+                        "right_column": rel_right_columns[i] if i < len(rel_right_columns) else ""
+                    })
+            module.relationships = relationships_list
+            logger.info(f"💾 Saved {len(relationships_list)} relationships")
             
             # Save RCAs
             rca_list = []
@@ -237,9 +433,9 @@ def edit_module_view(request, module_id):
             module.extra_suggestions = request.POST.get("extra_suggestions", "").strip()
             
             module.save()
+            logger.info(f"✅ Saved all module data for '{module.name}'")
             return redirect("dashboard")
-
-    # Prepare knowledge graph data for display
+    # ===== GET REQUEST: Prepare data for display =====
     knowledge_data = {}
     if module.tables:
         for table in module.tables:
@@ -256,6 +452,7 @@ def edit_module_view(request, module_id):
                     }
             except Exception as e:
                 logger.error(f"Error processing table {table}: {e}")
+                continue
 
     selected_tables = module.tables if isinstance(module.tables, list) else []
 
@@ -264,6 +461,7 @@ def edit_module_view(request, module_id):
         "tables": tables,
         "selected_tables": selected_tables,
         "knowledge_data": knowledge_data,
+        "relationships": module.relationships or [],  # ← NEW
         "rca_list": module.rca_list or [],
         "pos_tagging": module.pos_tagging or [],
         "metrics_data": module.metrics_data or {},
@@ -271,7 +469,6 @@ def edit_module_view(request, module_id):
         "kg_auto_generated": module.kg_auto_generated,
         "user_name": user_name,
     })
-
 
 # ---------- DELETE MODULE ----------
 @csrf_exempt
@@ -380,42 +577,58 @@ def upload_module_kg_csv(request, module_id):
 
     return redirect('edit_module', module_id=module_id)
 
-# ---------- GLOBAL KNOWLEDGE GRAPH (Legacy) ----------
+
+# ---------- GLOBAL KNOWLEDGE GRAPH (Legacy) - FIXED ----------
 def knowledge_graph_view(request):
     kg_instance, _ = KnowledgeGraph.objects.get_or_create(id=1)
     metrics_instance, _ = Metrics.objects.get_or_create(id=1)
     rca_instance, _ = RCA.objects.get_or_create(id=1)
     extra_instance, _ = Extra_suggestion.objects.get_or_create(id=1)
 
-    try:
-        existing_kg_data = json.loads(kg_instance.data) if isinstance(kg_instance.data, str) else kg_instance.data or {}
-    except:
+    # FIX: Don't call json.loads on data that's already a dict/list
+    if isinstance(kg_instance.data, str):
+        try:
+            existing_kg_data = json.loads(kg_instance.data)
+        except:
+            existing_kg_data = {}
+    elif isinstance(kg_instance.data, dict):
+        existing_kg_data = kg_instance.data
+    else:
         existing_kg_data = {}
 
-    try:
-        existing_metrics_data = json.loads(metrics_instance.data) if isinstance(metrics_instance.data, str) else metrics_instance.data or {}
-    except:
+    if isinstance(metrics_instance.data, str):
+        try:
+            existing_metrics_data = json.loads(metrics_instance.data)
+        except:
+            existing_metrics_data = {}
+    elif isinstance(metrics_instance.data, dict):
+        existing_metrics_data = metrics_instance.data
+    else:
         existing_metrics_data = {}
 
+    # Handle RCA data
     existing_rca_data = ""
     if rca_instance.data:
-        if isinstance(rca_instance.data, dict):
-            existing_rca_data = rca_instance.data.get("text", "")
-        else:
+        if isinstance(rca_instance.data, str):
             try:
-                existing_rca_data = json.loads(rca_instance.data).get("text", "")
+                parsed_rca = json.loads(rca_instance.data)
+                existing_rca_data = parsed_rca.get("text", "") if isinstance(parsed_rca, dict) else ""
             except:
                 existing_rca_data = ""
+        elif isinstance(rca_instance.data, dict):
+            existing_rca_data = rca_instance.data.get("text", "")
 
+    # Handle Extra suggestion data
     existing_extra_data = ""
     if extra_instance.data:
-        if isinstance(extra_instance.data, dict):
-            existing_extra_data = extra_instance.data.get("text", "")
-        else:
+        if isinstance(extra_instance.data, str):
             try:
-                existing_extra_data = json.loads(extra_instance.data).get("text", "")
+                parsed_extra = json.loads(extra_instance.data)
+                existing_extra_data = parsed_extra.get("text", "") if isinstance(parsed_extra, dict) else ""
             except:
                 existing_extra_data = ""
+        elif isinstance(extra_instance.data, dict):
+            existing_extra_data = extra_instance.data.get("text", "")
 
     tables = [t for t in connection.introspection.table_names() if t.startswith("tbl_")]
     knowledge_data = {}
@@ -490,9 +703,15 @@ def knowledge_graph_view(request):
 def download_knowledge_graph_csv(request):
     kg_instance = KnowledgeGraph.objects.first()
 
-    try:
-        data = json.loads(kg_instance.data) if isinstance(kg_instance.data, str) else kg_instance.data or {}
-    except:
+    # FIX: Handle both string and dict data
+    if isinstance(kg_instance.data, str):
+        try:
+            data = json.loads(kg_instance.data)
+        except:
+            data = {}
+    elif isinstance(kg_instance.data, dict):
+        data = kg_instance.data
+    else:
         data = {}
 
     response = HttpResponse(content_type="text/csv")
@@ -560,7 +779,7 @@ def chat_view(request, module_id):
 
 @csrf_exempt
 def chat_api(request):
-    """Handle chat messages with conversation persistence - FIXED VERSION"""
+    """Handle chat messages with conversation persistence"""
     if request.method != "POST":
         return JsonResponse({"error": "Method not allowed"}, status=405)
     
@@ -597,7 +816,7 @@ def chat_api(request):
             logger.warning(f"⚠️ Conversation {conversation_id} not found")
             conversation = None
     
-    # Create new conversation if needed (only for actual messages, not feedback)
+    # Create new conversation if needed
     if not conversation and user_query and not feedback:
         try:
             module = Module.objects.get(id=module_id)
@@ -633,7 +852,6 @@ def chat_api(request):
     # Process request
     try:
         if feedback:
-            # Handle feedback
             entity_type = feedback.get("entity_type")
             feedback_type = feedback.get("type")
             
@@ -747,7 +965,7 @@ def chat_api(request):
 
 @csrf_exempt
 def get_conversations(request):
-    """Get list of conversations for sidebar - FIXED VERSION"""
+    """Get list of conversations for sidebar"""
     if request.method != "GET":
         return JsonResponse({"error": "Method not allowed"}, status=405)
     
@@ -757,7 +975,6 @@ def get_conversations(request):
         return JsonResponse({"conversations": []})
     
     try:
-        # CRITICAL FIX: Filter by module foreign key
         conversations = Conversation.objects.filter(
             module_id=module_id
         ).order_by('-updated_at')[:50]

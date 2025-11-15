@@ -21,14 +21,16 @@ class GraphState(TypedDict, total=False):
     execution_error: Optional[str]
     route_decision: str                
     final_output: str                    
-    reasoning_trace: List[str]  
+    reasoning_trace: List[str]
+    module_config: Optional[Dict[str, Any]]
 
 
 def question_validator(state: GraphState):
     """
-    Enhanced question validator with fast-path routing for database queries
+    Enhanced question validator - FULLY DYNAMIC from knowledge graph
     """
     user_query = state['user_query']
+    module_config = state.get('module_config', {})
     
     print(f"\n{'='*70}")
     print(f"🔍 QUESTION VALIDATOR")
@@ -45,36 +47,46 @@ def question_validator(state: GraphState):
     
     query_lower = user_query.lower().strip()
     
-    # ========== FAST-PATH: Database Query Keywords ==========
-    # These indicate clear database queries - route immediately
-    database_keywords = [
-        # Metrics & Aggregations
-        'sales', 'revenue', 'total', 'sum', 'count', 'average', 'avg',
-        'maximum', 'max', 'minimum', 'min', 'quantity', 'amount', 'value',
-        
-        # Actions
+    # ========== BUILD DYNAMIC KEYWORDS FROM MODULE CONFIG ==========
+    database_keywords = []
+    
+    # From metrics
+    metrics = module_config.get('metrics', {})
+    if metrics:
+        for metric_name in metrics.keys():
+            database_keywords.extend(metric_name.lower().split())
+    
+    # From POS tagging (entity types)
+    pos_tagging = module_config.get('pos_tagging', [])
+    if pos_tagging:
+        for pos in pos_tagging:
+            if pos.get('name'):
+                database_keywords.append(pos['name'].lower())
+            if pos.get('reference'):
+                database_keywords.extend(pos['reference'].lower().split(','))
+    
+    # From table names
+    tables = module_config.get('tables', [])
+    for table in tables:
+        database_keywords.append(table.lower())
+    
+    # Generic data keywords (minimal hardcoding)
+    generic_keywords = [
         'show', 'get', 'fetch', 'retrieve', 'find', 'list', 'display',
         'give', 'tell', 'what is', 'what are', 'how many', 'how much',
-        
-        # Entities (Haldiram specific)
-        'product', 'distributor', 'superstockist', 'customer', 'party',
-        'sold to', 'shipment', 'invoice', 'order', 'bhujia', 'namkeen',
-        'sev', 'mixture', 'chips', 'papad',
-        
-        # Comparisons & Rankings
-        'top', 'bottom', 'best', 'worst', 'highest', 'lowest', 'rank',
-        'compare', 'comparison', 'versus', 'vs',
-        
-        # Time references
-        'january', 'february', 'march', 'april', 'may', 'june',
-        'july', 'august', 'september', 'october', 'november', 'december',
-        'month', 'year', 'week', 'day', 'today', 'yesterday', 'last',
-        'this', 'current', 'previous', 'recent', 'latest',
-        
-        # Analysis
-        'trend', 'analysis', 'performance', 'growth', 'report', 'summary'
+        'total', 'sum', 'count', 'average', 'avg', 'max', 'min',
+        'top', 'bottom', 'best', 'worst', 'highest', 'lowest',
+        'compare', 'comparison', 'trend', 'analysis', 'report'
     ]
     
+    database_keywords.extend(generic_keywords)
+    
+    # Remove duplicates
+    database_keywords = list(set(database_keywords))
+    
+    print(f"📋 Dynamic keywords loaded: {len(database_keywords)} keywords")
+    
+    # ========== FAST-PATH: Database Query Keywords ==========
     has_database_keyword = any(keyword in query_lower for keyword in database_keywords)
     
     if has_database_keyword:
@@ -86,7 +98,6 @@ def question_validator(state: GraphState):
         }
     
     # ========== FAST-PATH: Non-Database Queries ==========
-    # Greetings
     greeting_patterns = [
         'hi', 'hello', 'hey', 'good morning', 'good afternoon', 
         'good evening', 'greetings'
@@ -94,9 +105,20 @@ def question_validator(state: GraphState):
     
     if any(query_lower.startswith(pattern) for pattern in greeting_patterns):
         print("👋 Greeting detected")
+        
+        # Build dynamic greeting response
+        module_name = module_config.get('module_name', 'database')
+        greeting_msg = f"Hello! I'm your {module_name} assistant. I can help you query data"
+        
+        if metrics:
+            metric_examples = list(metrics.keys())[:3]
+            greeting_msg += f" about {', '.join(metric_examples)}"
+        
+        greeting_msg += ". What would you like to know?"
+        
         return {
             "route_decision": "summarized_results",
-            "final_output": "Hello! I'm your Haldiram database assistant. I can help you query sales data, products, distributors, superstockists, and more. What would you like to know?",
+            "final_output": greeting_msg,
             "validation_status": "greeting"
         }
     
@@ -105,66 +127,56 @@ def question_validator(state: GraphState):
     
     if any(pattern in query_lower for pattern in help_patterns):
         print("❓ Help request detected")
+        
+        # Build dynamic help message
+        help_msg = f"I can help you query the {module_config.get('module_name', 'database')}. "
+        
+        if metrics:
+            help_msg += f"\n\n📊 **Available Metrics:**\n"
+            for metric_name, metric_desc in list(metrics.items())[:5]:
+                help_msg += f"   • {metric_name}: {metric_desc}\n"
+        
+        if pos_tagging:
+            help_msg += f"\n\n🏷️ **Entity Types:**\n"
+            for pos in pos_tagging[:5]:
+                if pos.get('name') and pos.get('reference'):
+                    help_msg += f"   • {pos['name']}: {pos['reference']}\n"
+        
+        help_msg += "\n\nJust ask naturally - I'll understand your queries!"
+        
         return {
             "route_decision": "summarized_results",
-            "final_output": """I can help you query the Haldiram database. Here are some examples:
-
-📊 **Sales Queries:**
-   • "What are the total sales of Bhujia?"
-   • "Show me sales for XYZ distributor in May"
-   • "Top 10 products by revenue"
-   • "Sales of sb marke in March"
-
-📅 **Time-based Queries:**
-   • "Sales in last 3 months"
-   • "Monthly trend for ABC product"
-   • "Compare this month vs last month"
-
-🏢 **Entity Queries:**
-   • "List all products"
-   • "Show distributors in Delhi"
-   • "Superstockist performance"
-
-Just ask naturally - I'll understand abbreviated names and partial matches!""",
+            "final_output": help_msg,
             "validation_status": "help_request"
         }
     
     # ========== LLM VALIDATION (For Ambiguous Cases) ==========
     print("🤔 Using LLM for ambiguous query classification...")
     
-    validation_prompt = f"""You are validating queries for a Haldiram sales database system.
+    # Build dynamic domain description
+    domain_desc = f"Database: {module_config.get('module_name', 'Unknown')}\n"
+    
+    if metrics:
+        domain_desc += f"Metrics: {', '.join(list(metrics.keys())[:10])}\n"
+    
+    if pos_tagging:
+        entity_types = [pos['name'] for pos in pos_tagging if pos.get('name')]
+        domain_desc += f"Entities: {', '.join(entity_types[:10])}\n"
+    
+    if tables:
+        domain_desc += f"Tables: {', '.join(tables[:5])}\n"
+    
+    validation_prompt = f"""You are validating queries for a database system.
 
-Database Domain:
-- Sales data (products, quantities, revenue)
-- Products (Bhujia, Namkeen, Sev, Chips, etc.)
-- Distributors and Superstockists (companies, parties)
-- Shipments and invoices
-- Time-based sales records
+{domain_desc}
 
 User Query: "{user_query}"
 
 CRITICAL INSTRUCTIONS:
 1. Be VERY INCLUSIVE - if there's ANY chance this relates to data, mark as VALID
-2. Even abbreviated or partial entity names should be VALID (e.g., "sb marke", "xyz company")
-3. Even simple data requests should be VALID (e.g., "show X", "get Y", "total Z")
+2. Even abbreviated or partial entity names should be VALID
+3. Even simple data requests should be VALID
 4. Only mark INVALID if it's clearly unrelated (weather, jokes, math, cooking, etc.)
-
-Examples of VALID queries:
-✅ "sales of sb marke" - asking for sales data
-✅ "total bhujia" - abbreviated but clearly data request
-✅ "xyz company revenue" - entity + metric
-✅ "show products" - data retrieval
-✅ "march sales" - time-based data
-✅ "top 5" - ranking query
-✅ "how much did we sell" - sales question
-✅ "distributor performance" - analytics
-
-Examples of INVALID queries:
-❌ "what's the weather" - not database related
-❌ "tell me a joke" - entertainment
-❌ "how to cook pasta" - cooking instructions
-❌ "what's 2+2" - math calculation
-❌ "who is the president" - general knowledge
 
 Respond with ONLY ONE WORD:
 - "VALID" if it's a database/data query
@@ -175,7 +187,7 @@ Your response:"""
     try:
         validation_llm = ChatOpenAI(
             temperature=0, 
-            model="gpt-4o-mini",  # Changed from gpt-3.5-turbo for better accuracy
+            model="gpt-4o-mini",
             api_key=os.getenv('OPENAI_API_KEY')
         )
         
@@ -202,53 +214,7 @@ Your response:"""
         print(f"⚠️ LLM validation error: {e}")
         print("⚠️ Defaulting to VALID (safe routing to entity_resolver)")
         
-        # In case of error, default to entity_resolver (safer than rejecting)
         return {
             "route_decision": "entity_resolver",
             "validation_status": "valid_query_default"
         }
-
-
-# ========== Testing Function ==========
-if __name__ == "__main__":
-    """Test the question validator with various queries"""
-    
-    test_cases = [
-        # Should be VALID
-        ("sales of sb marke", "VALID"),
-        ("total sales of bhujia", "VALID"),
-        ("show me xyz company revenue", "VALID"),
-        ("march sales", "VALID"),
-        ("top 10 products", "VALID"),
-        ("distributor performance", "VALID"),
-        ("how much did we sell", "VALID"),
-        
-        # Should be INVALID
-        ("what's the weather", "INVALID"),
-        ("tell me a joke", "INVALID"),
-        ("how to cook pasta", "INVALID"),
-        
-        # Edge cases
-        ("hi", "GREETING"),
-        ("help", "HELP"),
-    ]
-    
-    print("\n" + "="*70)
-    print("TESTING QUESTION VALIDATOR")
-    print("="*70)
-    
-    for query, expected in test_cases:
-        state = {"user_query": query}
-        result = question_validator(state)
-        
-        actual = result.get("validation_status", "unknown")
-        route = result.get("route_decision")
-        
-        status = "✅" if (
-            (expected == "VALID" and route == "entity_resolver") or
-            (expected == "INVALID" and route == "summarized_results") or
-            (expected in actual)
-        ) else "❌"
-        
-        print(f"\n{status} Query: '{query}'")
-        print(f"   Expected: {expected}, Got: {actual}, Route: {route}")

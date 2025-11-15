@@ -96,36 +96,50 @@ def shortlist_candidates_with_scores(text, options, k=15, score_cutoff=60):
 
 # ==================== LLM PARSING ====================
 def llm_understand(user_query, module_config=None):
-    """Extract intent, metrics, and entities using LLM with module context"""
+    """Extract intent, metrics, and entities using LLM with module context - FULLY DYNAMIC"""
     
-    # Build context from module config
+    # Build context from module config - NO HARDCODING
     context_lines = []
     
     if module_config:
         module_name = module_config.get('module_name', 'Database')
         context_lines.append(f"Module: {module_name}")
         
-        # Add entity types
-        entity_map = module_config.get('entity_inference_map', {})
-        if entity_map:
-            context_lines.append(f"\nAvailable entity types: {', '.join(entity_map.keys())}")
+        # Add entity types from POS tagging
+        pos_tagging = module_config.get('pos_tagging', [])
+        if pos_tagging:
+            entity_types = [pos['name'] for pos in pos_tagging if pos.get('name')]
+            if entity_types:
+                context_lines.append(f"\nAvailable entity types: {', '.join(entity_types)}")
+                context_lines.append("Entity references:")
+                for pos in pos_tagging[:10]:  # Limit to 10 for prompt size
+                    if pos.get('name') and pos.get('reference'):
+                        context_lines.append(f"  - {pos['name']}: {pos['reference']}")
         
-        # Add metrics
+        # Add metrics from module config
         metrics = module_config.get('metrics', {})
         if metrics:
             context_lines.append(f"\nAvailable metrics:")
-            for metric_name, metric_desc in list(metrics.items())[:5]:
+            for metric_name, metric_desc in list(metrics.items())[:10]:
                 context_lines.append(f"  - {metric_name}: {metric_desc}")
         
-        # Add RCA context if available
-        rca_context = module_config.get('rca_context', '')
-        if rca_context and len(rca_context) < 500:
-            context_lines.append(f"\nBusiness context:\n{rca_context[:300]}...")
+        # Add RCA context
+        rca_list = module_config.get('rca_list', [])
+        if rca_list:
+            context_lines.append(f"\nBusiness context (RCA):")
+            for rca in rca_list[:3]:  # Limit to 3 for prompt size
+                if rca.get('title') and rca.get('content'):
+                    context_lines.append(f"  - {rca['title']}: {rca['content'][:200]}...")
+        
+        # Add extra suggestions
+        extra_suggestions = module_config.get('extra_suggestions', '')
+        if extra_suggestions and len(extra_suggestions.strip()) > 0:
+            context_lines.append(f"\nAdditional context:\n{extra_suggestions[:300]}...")
     
-    context = "\n".join(context_lines)
+    context = "\n".join(context_lines) if context_lines else "No additional context available."
     
     prompt = f"""
-You are a business query analyzer.
+You are a business query analyzer for a database system.
 
 {context}
 
@@ -133,12 +147,12 @@ You are a business query analyzer.
 
 2. If relevant, extract:
    - intent (query|aggregation|ranking|comparison)
-   - metrics (from available metrics above, or common ones like sales, revenue, quantity)
+   - metrics (from available metrics above, or infer from query)
    - entities: COMPLETE entity names as dictionary with entity type as key
 
 Examples:
-- "VH trading" → {{"intent": "query", "entities": {{"distributor": ["VH trading"]}}, "metrics": []}}
-- "bhujia sales" → {{"intent": "query", "entities": {{"product": ["bhujia"]}}, "metrics": ["sales"]}}
+- "XYZ company" → {{"intent": "query", "entities": {{"company": ["XYZ company"]}}, "metrics": []}}
+- "product sales" → {{"intent": "query", "entities": {{"product": ["product"]}}, "metrics": ["sales"]}}
 - "sales in may" → {{"intent": "query", "entities": {{}}, "metrics": ["sales"]}}
 
 User query: ```{user_query}```
@@ -146,16 +160,16 @@ User query: ```{user_query}```
 Return ONLY valid JSON with intent, metrics, entities keys.
     """
     
-    resp = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "Return only valid JSON."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0
-    )
-    
     try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Return only valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0
+        )
+        
         content = resp.choices[0].message.content.strip()
         
         if "```json" in content:
