@@ -87,6 +87,15 @@ def new_module_view(request):
         except:
             selected_columns = {}
 
+        # -------------- FIX STARTS HERE --------------
+        # Ensure selected_tables is always a Python list, not a JSON string
+        if isinstance(selected_tables, str):
+            try:
+                selected_tables = json.loads(selected_tables)
+            except:
+                selected_tables = [selected_tables]
+        # -------------- FIX ENDS HERE ----------------
+
         # Create module with selected tables
         module = Module.objects.create(
             user_name=user_name,
@@ -110,6 +119,7 @@ def new_module_view(request):
         
         return redirect("edit_module", module_id=module.id)
 
+    # fetch list of tables
     with connection.cursor() as cursor:
         cursor.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
         all_tables = [row[0] for row in cursor.fetchall()]
