@@ -245,6 +245,41 @@
             border-radius: 8px;
             padding: 20px;
             margin-top: 16px;
+            max-width: 800px;
+        }
+
+        .chart-container canvas {
+            max-height: 400px;
+        }
+
+        .data-table {
+            overflow-x: auto;
+            margin-top: 15px;
+            background: white;
+            border-radius: 8px;
+        }
+
+        .data-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            background: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .data-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e0e0e0;
+            color: #333;
+        }
+
+        .data-table tr:hover {
+            background: #f5f5f5;
         }
 
         .input-container {
@@ -338,6 +373,18 @@
             padding: 20px;
             font-size: 14px;
         }
+
+        .sql-code {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+        }
     </style>
 </head>
 <body>
@@ -422,11 +469,9 @@
         function startNewChat() {
             console.log('Starting new chat...');
             
-            // Clear current conversation
             currentConversationId = null;
             pendingClarification = null;
             
-            // Reset UI
             document.getElementById('messagesContainer').innerHTML = `
                 <div class="message assistant-message">
                     <div class="message-header">
@@ -442,12 +487,10 @@
             document.getElementById('chatTitle').textContent = 'New Chat';
             document.getElementById('messageInput').value = '';
             
-            // Remove active class from all conversations
             document.querySelectorAll('.conversation-item').forEach(item => {
                 item.classList.remove('active');
             });
             
-            // Focus input
             document.getElementById('messageInput').focus();
         }
 
@@ -457,11 +500,9 @@
             
             if (!message) return;
 
-            // Disable input
             input.disabled = true;
             document.getElementById('sendBtn').disabled = true;
 
-            // Add user message to UI
             appendMessage('user', message);
             input.value = '';
             input.style.height = 'auto';
@@ -493,7 +534,6 @@
                 console.error('Error:', error);
                 appendMessage('assistant', '❌ Sorry, something went wrong. Please try again.');
             } finally {
-                // Re-enable input
                 input.disabled = false;
                 document.getElementById('sendBtn').disabled = false;
                 input.focus();
@@ -501,7 +541,6 @@
         }
 
         function handleResponse(data) {
-            // Update conversation ID - NEW CHAT WILL GET ID HERE
             if (data.conversation_id) {
                 const wasNewChat = !currentConversationId;
                 currentConversationId = data.conversation_id;
@@ -514,16 +553,15 @@
             if (data.type === 'clarification') {
                 handleClarification(data);
             } else if (data.type === 'response') {
-                appendMessage('assistant', data.message);
+                appendMessage('assistant', data.message, data.metadata);
                 
-                if (data.chart_data) {
-                    renderChart(data.chart_data);
+                if (data.metadata && data.metadata.chart) {
+                    renderChart(data.metadata.chart);
                 }
             } else if (data.type === 'error') {
                 appendMessage('assistant', '❌ ' + data.message);
             }
 
-            // Reload conversations list to show new/updated conversation
             loadConversations();
         }
 
@@ -559,7 +597,6 @@
         async function selectOption(option, subtype) {
             console.log('Selected:', option, 'Type:', subtype);
             
-            // Disable all option buttons
             document.querySelectorAll('.option-btn').forEach(btn => {
                 btn.disabled = true;
                 btn.style.opacity = '0.5';
@@ -624,7 +661,6 @@
                 console.error('Error:', error);
                 appendMessage('assistant', '❌ Sorry, something went wrong.');
                 
-                // Re-enable buttons
                 document.querySelectorAll('.option-btn').forEach(btn => {
                     btn.disabled = false;
                     btn.style.opacity = '1';
@@ -632,7 +668,7 @@
             }
         }
 
-        function appendMessage(role, content) {
+        function appendMessage(role, content, metadata) {
             const container = document.getElementById('messagesContainer');
             const isUser = role === 'user';
             
@@ -668,8 +704,104 @@
         }
 
         function renderChart(chartData) {
-            console.log('Chart data:', chartData);
-            // Add chart rendering logic here
+            console.log('Rendering chart:', chartData);
+            
+            const container = document.getElementById('messagesContainer');
+            const chartContainer = document.createElement('div');
+            chartContainer.className = 'chart-container';
+            chartContainer.id = 'chart_' + Date.now();
+            
+            if (chartData.type === 'table') {
+                let html = '<div class="data-table"><table><thead><tr>';
+                chartData.columns.forEach(col => {
+                    html += `<th>${escapeHtml(col)}</th>`;
+                });
+                html += '</tr></thead><tbody>';
+                
+                chartData.data.forEach(row => {
+                    html += '<tr>';
+                    chartData.columns.forEach(col => {
+                        const value = row[col];
+                        html += `<td>${value !== null && value !== undefined ? escapeHtml(String(value)) : '-'}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+                
+                chartContainer.innerHTML = html;
+            } else {
+                chartContainer.innerHTML = '<canvas id="canvas_' + chartContainer.id + '"></canvas>';
+                container.appendChild(chartContainer);
+                
+                setTimeout(() => {
+                    const canvas = document.getElementById('canvas_' + chartContainer.id);
+                    if (!canvas) return;
+                    
+                    const ctx = canvas.getContext('2d');
+                    
+                    const colors = [
+                        'rgba(102, 126, 234, 0.8)',
+                        'rgba(118, 75, 162, 0.8)',
+                        'rgba(240, 147, 251, 0.8)',
+                        'rgba(245, 87, 108, 0.8)',
+                        'rgba(56, 239, 125, 0.8)'
+                    ];
+                    
+                    const datasets = chartData.datasets.map((dataset, index) => ({
+                        label: dataset.label,
+                        data: dataset.data,
+                        backgroundColor: chartData.type === 'pie' ? colors : colors[index % colors.length],
+                        borderColor: colors[index % colors.length],
+                        borderWidth: 2,
+                        fill: chartData.type === 'line' ? false : true
+                    }));
+                    
+                    new Chart(ctx, {
+                        type: chartData.type,
+                        data: {
+                            labels: chartData.labels,
+                            datasets: datasets
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: {
+                                    display: true,
+                                    position: 'top',
+                                    labels: {
+                                        color: '#ececf1'
+                                    }
+                                }
+                            },
+                            scales: chartData.type !== 'pie' ? {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        color: '#ececf1'
+                                    },
+                                    grid: {
+                                        color: '#444654'
+                                    }
+                                },
+                                x: {
+                                    ticks: {
+                                        color: '#ececf1'
+                                    },
+                                    grid: {
+                                        color: '#444654'
+                                    }
+                                }
+                            } : {}
+                        }
+                    });
+                }, 100);
+                
+                return;
+            }
+            
+            container.appendChild(chartContainer);
+            container.scrollTop = container.scrollHeight;
         }
 
         async function loadConversations() {
@@ -720,7 +852,6 @@
                 document.getElementById('messagesContainer').innerHTML = '';
                 document.getElementById('chatTitle').textContent = data.conversation.title;
                 
-                // Mark as active in sidebar
                 document.querySelectorAll('.conversation-item').forEach(item => {
                     item.classList.remove('active');
                 });
@@ -729,9 +860,8 @@
                     activeItem.classList.add('active');
                 }
                 
-                // Load messages
                 data.messages.forEach(msg => {
-                    appendMessage(msg.is_user ? 'user' : 'assistant', msg.content);
+                    appendMessage(msg.is_user ? 'user' : 'assistant', msg.content, msg.metadata);
                     
                     if (!msg.is_user && msg.metadata && msg.metadata.chart) {
                         renderChart(msg.metadata.chart);
@@ -761,12 +891,10 @@
                     throw new Error(`HTTP ${response.status}`);
                 }
 
-                // If deleting current conversation, start new chat
                 if (id === currentConversationId) {
                     startNewChat();
                 }
 
-                // Reload conversations list
                 loadConversations();
 
             } catch (error) {
@@ -796,7 +924,6 @@
             return cookieValue;
         }
 
-        // Load conversations on page load
         window.addEventListener('DOMContentLoaded', function() {
             console.log('Page loaded. Module ID:', MODULE_ID);
             loadConversations();

@@ -1,3 +1,4 @@
+{% load dict_filters %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -304,7 +305,6 @@
             font-weight: 600;
         }
 
-        /* ========== RELATIONSHIPS STYLING ========== */
         .relationship-item {
             background: white;
             padding: 20px;
@@ -378,6 +378,32 @@
             margin-top: 10px;
             font-size: 1.8em;
             color: #667eea;
+        }
+
+        .table-info-box {
+            background: #fff8dc;
+            border: 2px solid #ffd700;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .table-info-label {
+            font-weight: 600;
+            color: #d4a017;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .table-info-textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ffd700;
+            border-radius: 8px;
+            font-family: inherit;
+            min-height: 80px;
+            resize: vertical;
+            background: white;
         }
 
         @media (max-width: 968px) {
@@ -462,45 +488,69 @@
             <div class="section">
                 <div class="section-title">
                     🧠 Knowledge Graph
-                    <a href="/download-module-kg-csv/{{ module.id }}/" class="btn btn-secondary" style="margin-left: auto; font-size: 0.9em;">
-                        📥 CSV
-                    </a>
+                    <div style="margin-left: auto; display: flex; gap: 10px;">
+                        <a href="/download-module-kg-csv/{{ module.id }}/" class="btn btn-secondary" style="font-size: 0.9em;">
+                            📥 Download CSV
+                        </a>
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('uploadKGFile').click()" style="font-size: 0.9em;">
+                            📤 Upload CSV
+                        </button>
+                        <input type="file" id="uploadKGFile" accept=".csv" style="display: none;" onchange="uploadKG(this)">
+                    </div>
                 </div>
 
                 <div id="knowledgeGraphContainer">
                     {% if knowledge_data %}
                         {% for table, columns in knowledge_data.items %}
-                            <h3 style="color: #667eea; margin-top: 30px; margin-bottom: 15px;">📋 {{ table }}</h3>
-                            <table class="kg-table">
-                                <thead>
-                                    <tr>
-                                        <th style="width: 25%;">Column Name</th>
-                                        <th style="width: 50%;">Description</th>
-                                        <th style="width: 25%;">Data Type / Category</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for column, info in columns.items %}
+                            <div style="margin-bottom: 40px;">
+                                <h3 style="color: #667eea; margin-top: 30px; margin-bottom: 15px;">📋 {{ table }}</h3>
+                                
+                                <!-- TABLE INFO TEXTBOX -->
+                                <div class="table-info-box">
+                                    <label class="table-info-label">
+                                        📝 Table Description (What does this table represent?)
+                                    </label>
+                                    <textarea 
+                                        name="table_info__{{ table }}"
+                                        class="table-info-textarea"
+                                        placeholder="Describe the purpose of this table, what data it contains, and how it's used..."
+                                    >{{ table_info_map|get_item:table }}</textarea>
+                                </div>
+                                
+                                <!-- COLUMNS TABLE -->
+                                <table class="kg-table">
+                                    <thead>
                                         <tr>
-                                            <td><strong>{{ column }}</strong></td>
-                                            <td>
-                                                <textarea 
-                                                    name="kg_desc__{{ table }}__{{ column }}" 
-                                                    placeholder="Describe what this column represents..."
-                                                >{{ info.desc }}</textarea>
-                                            </td>
-                                            <td>
-                                                <input 
-                                                    type="text" 
-                                                    name="kg_datatype__{{ table }}__{{ column }}" 
-                                                    placeholder="e.g., identifier, text, number..."
-                                                    value="{{ info.datatype }}"
-                                                >
-                                            </td>
+                                            <th style="width: 25%;">Column Name</th>
+                                            <th style="width: 50%;">Description</th>
+                                            <th style="width: 25%;">Data Type / Category</th>
                                         </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {% for column, info in columns.items %}
+                                            {% if column != 'TABLE_INFO' %}
+                                                <tr>
+                                                    <td><strong>{{ column }}</strong></td>
+                                                    <td>
+                                                        <textarea 
+                                                            name="kg_desc__{{ table }}__{{ column }}" 
+                                                            placeholder="Describe what this column represents..."
+                                                        >{{ info.desc }}</textarea>
+                                                    </td>
+                                                    <td>
+                                                        <input 
+                                                            type="text" 
+                                                            name="kg_datatype__{{ table }}__{{ column }}" 
+                                                            placeholder="e.g., identifier, text, number..."
+                                                            value="{{ info.datatype }}"
+                                                        >
+                                                    </td>
+                                                </tr>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
                         {% endfor %}
                     {% else %}
                         <p style="text-align: center; color: #999; padding: 40px;">
@@ -510,7 +560,7 @@
                 </div>
             </div>
 
-            <!-- RELATIONSHIPS/JOINS SECTION (NEW) -->
+            <!-- RELATIONSHIPS/JOINS SECTION -->
             <div class="section">
                 <div class="section-title">
                     🔗 Table Relationships / Joins
@@ -697,18 +747,32 @@
         }
 
         // Load table columns when a table is checked
+        // Load table columns when a table is checked
         async function loadTableColumns(tableName, isChecked) {
+            console.log(`Loading columns for ${tableName}, checked: ${isChecked}`);
+            
             if (isChecked) {
                 if (!loadedTables.has(tableName)) {
                     try {
                         const container = document.getElementById(`columns_${tableName}`);
-                        container.innerHTML = '<small style="color: #999;">Loading columns...</small>';
+                        if (!container) {
+                            console.error(`Container not found for ${tableName}`);
+                            return;
+                        }
+                        
+                        container.innerHTML = '<small style="color: #667eea;">⏳ Loading columns...</small>';
                         container.classList.add('show');
 
                         const response = await fetch(`/get-table-columns/?table=${tableName}`);
-                        const data = await response.json();
                         
-                        if (data.columns) {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        
+                        const data = await response.json();
+                        console.log(`Received ${data.columns ? data.columns.length : 0} columns for ${tableName}`);
+                        
+                        if (data.columns && data.columns.length > 0) {
                             selectedColumns[tableName] = [];
                             
                             let html = '<div style="margin-top: 10px;">';
@@ -736,24 +800,36 @@
                             
                             container.innerHTML = html;
                             loadedTables.add(tableName);
+                            console.log(`✅ Successfully loaded ${data.columns.length} columns for ${tableName}`);
                         } else {
-                            container.innerHTML = '<small style="color: #f5576c;">Error loading columns</small>';
+                            container.innerHTML = '<small style="color: #f5576c;">No columns found</small>';
+                            console.warn(`No columns returned for ${tableName}`);
                         }
                     } catch (error) {
                         console.error('Error loading columns:', error);
                         const container = document.getElementById(`columns_${tableName}`);
-                        container.innerHTML = '<small style="color: #f5576c;">Error loading columns</small>';
+                        if (container) {
+                            container.innerHTML = '<small style="color: #f5576c;">❌ Error loading columns. Check console.</small>';
+                        }
                     }
                 } else {
+                    // Table already loaded, just show the container
                     const container = document.getElementById(`columns_${tableName}`);
-                    container.classList.add('show');
+                    if (container) {
+                        container.classList.add('show');
+                        console.log(`Table ${tableName} already loaded, showing container`);
+                    }
                 }
             } else {
+                // Unchecking the table
                 const container = document.getElementById(`columns_${tableName}`);
-                container.classList.remove('show');
+                if (container) {
+                    container.classList.remove('show');
+                }
                 if (selectedColumns[tableName]) {
                     selectedColumns[tableName] = [];
                 }
+                console.log(`Unchecked ${tableName}, hiding columns`);
             }
         }
 
@@ -775,6 +851,7 @@
             } else {
                 selectedColumns[tableName] = selectedColumns[tableName].filter(c => c !== columnName);
             }
+            console.log(`Column ${columnName} in ${tableName} is now ${isChecked ? 'selected' : 'deselected'}`);
         }
 
         // Generate with AI
@@ -863,8 +940,7 @@
             selectedColumns = {};
         }
 
-        // ========== RELATIONSHIPS FUNCTIONS ==========
-        
+        // Load columns for relationship dropdowns
         async function loadColumnsForRelationship(selectElement, side) {
             const tableName = selectElement.value;
             if (!tableName) return;
@@ -916,7 +992,6 @@
             
             item.innerHTML = `
                 <div class="relationship-grid">
-                    <!-- Left Side -->
                     <div class="relationship-side">
                         <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Left Table</label>
                         <select name="rel_left_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'left')">
@@ -929,7 +1004,6 @@
                         </select>
                     </div>
 
-                    <!-- Relationship Type -->
                     <div class="relationship-center">
                         <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Relationship</label>
                         <select name="rel_type" class="rel-type-select">
@@ -941,7 +1015,6 @@
                         <div class="rel-arrow">↔️</div>
                     </div>
 
-                    <!-- Right Side -->
                     <div class="relationship-side">
                         <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Right Table</label>
                         <select name="rel_right_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'right')">
@@ -959,6 +1032,44 @@
             `;
             
             list.appendChild(item);
+        }
+
+        // Upload Knowledge Graph CSV
+        async function uploadKG(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            if (!file.name.endsWith('.csv')) {
+                alert('Please upload a CSV file');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('csv_file', file);
+            formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+            
+            try {
+                showAlert('Uploading knowledge graph...', 'success');
+                
+                const response = await fetch(`/upload-module-kg-csv/{{ module.id }}/`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    showAlert('Knowledge graph uploaded successfully! Reloading...', 'success');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    showAlert('Error uploading file. Please try again.', 'error');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                showAlert('Failed to upload knowledge graph', 'error');
+            }
+            
+            input.value = '';
         }
 
         // Show alert message
