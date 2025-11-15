@@ -73,6 +73,8 @@ def dashboard_view(request):
 
 # ---------- CREATE NEW MODULE ----------
 
+
+
 def new_module_view(request):
     user_name = request.session.get("user_name")
     if not user_name:
@@ -81,70 +83,84 @@ def new_module_view(request):
     if request.method == "POST":
         module_name = request.POST.get("module_name")
 
-        # -----------------------------
-        # FIX: Get selected tables safely
-        # -----------------------------
+        # -----------------------------------------------
+        # ⭐ FIX: Always read selected tables from JSON
+        # -----------------------------------------------
         selected_tables_json = request.POST.get("selected_tables_json", "[]")
 
         try:
             selected_tables = json.loads(selected_tables_json)
             if not isinstance(selected_tables, list):
                 selected_tables = []
-        except:
-            # fallback (rare)
+        except Exception as e:
+            print("JSON LOAD ERROR:", e)
+            # Fallback (rare, but safe)
             selected_tables = request.POST.getlist("selected_tables")
 
-        # -----------------------------
+        print("DEBUG selected_tables_json:", selected_tables_json)
+        print("DEBUG selected_tables:", selected_tables)
+
+        # -----------------------------------------------
         # Read selected columns JSON
-        # -----------------------------
+        # -----------------------------------------------
         selected_columns_json = request.POST.get("selected_columns", "{}")
         try:
             selected_columns = json.loads(selected_columns_json)
         except:
             selected_columns = {}
 
-        # -----------------------------
-        # Create the module safely
-        # -----------------------------
+        # -----------------------------------------------
+        # Create Module safely
+        # -----------------------------------------------
         module = Module.objects.create(
             user_name=user_name,
             name=module_name,
-            tables=selected_tables,   # <-- NOW ALWAYS a clean Python list
+            tables=selected_tables,  # ALWAYS clean Python list now
         )
-        
-        # Auto-generate KG?
+
+        # -----------------------------------------------
+        # Auto-generate KG (optional)
+        # -----------------------------------------------
         generate_kg = request.POST.get("generate_kg") == "true"
         if generate_kg and selected_tables:
             try:
                 from .utils.kg_generator import generate_knowledge_graph_with_llm
-                logger.info(f"Auto-generating KG for '{module_name}' with tables: {selected_tables}")
-                module.knowledge_graph_data = generate_knowledge_graph_with_llm(selected_tables, selected_columns)
+                logger.info(f"Generating KG for '{module_name}' with tables {selected_tables}")
+
+                module.knowledge_graph_data = generate_knowledge_graph_with_llm(
+                    selected_tables, selected_columns
+                )
                 module.kg_auto_generated = True
                 module.save()
+
             except Exception as e:
-                logger.error(f"KG generation error: {str(e)}")
+                logger.error(f"KG generation failed: {str(e)}")
                 logger.error(traceback.format_exc())
 
         return redirect("edit_module", module_id=module.id)
 
-    # -----------------------
-    # Load database tables
-    # -----------------------
+    # ---------------------------------------------------
+    # Load all tables from DB
+    # ---------------------------------------------------
     with connection.cursor() as cursor:
         cursor.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
         all_tables = [row[0] for row in cursor.fetchall()]
 
     exclude_tables = [
-        'auth_group','auth_group_permissions','auth_permission',
-        'auth_user','auth_user_groups','auth_user_user_permissions',
-        'django_admin_log','django_content_type','django_migrations','django_session',
-        'pgadmin_module','pgadmin_conversation','pgadmin_message',
-        'pgadmin_knowledgegraph','pgadmin_metrics','pgadmin_rca','pgadmin_extra_suggestion'
+        'auth_group', 'auth_group_permissions', 'auth_permission',
+        'auth_user', 'auth_user_groups', 'auth_user_user_permissions',
+        'django_admin_log', 'django_content_type', 'django_migrations', 'django_session',
+        'pgadmin_module', 'pgadmin_conversation', 'pgadmin_message',
+        'pgadmin_knowledgegraph', 'pgadmin_metrics', 'pgadmin_rca', 'pgadmin_extra_suggestion'
     ]
 
     tables = [t for t in all_tables if t not in exclude_tables]
 
-    return render(request, "new_module.html", {"tables": tables, "user_name": user_name})
+    return render(request, "new_module.html", {
+        "tables": tables,
+        "user_name": user_name,
+    })
+
 
 # ---------- EDIT MODULE ----------
 def edit_module_view(request, module_id):
