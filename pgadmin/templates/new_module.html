@@ -273,6 +273,7 @@
 
         <form method="POST" id="moduleForm">
             {% csrf_token %}
+            <input type="hidden" name="selected_tables_json" id="selectedTablesJSON">
             <input type="hidden" name="selected_columns" id="selectedColumnsInput">
             <input type="hidden" name="generate_kg" id="generateKGInput">
 
@@ -356,6 +357,14 @@
             }
         }
 
+        function updateSelectedTablesJSON() {
+            const checkedTables = Array.from(
+                document.querySelectorAll('input[name="selected_tables"]:checked')
+            ).map(cb => cb.value);
+
+            document.getElementById("selectedTablesJSON").value = JSON.stringify(checkedTables);
+        }
+
         function displayColumns(tableName, columns) {
             const container = document.getElementById(`columns_${tableName}`);
             if (!container) return;
@@ -393,7 +402,7 @@
                 delete selectedColumns[tableName];
                 updateColumnCount(tableName);
             }
-            
+            updateSelectedTablesJSON()
             updateSelectedColumnsInput();
         }
 
@@ -416,7 +425,7 @@
 
         function updateColumnCount(tableName) {
             const count = selectedColumns[tableName] ? selectedColumns[tableName].length : 0;
-            const countElement = document.getElementById(`count_{{ table }}`);
+            const countElement = document.getElementById(`count_${tableName}`);
             if (countElement) {
                 countElement.textContent = `(${count} columns)`;
             }
