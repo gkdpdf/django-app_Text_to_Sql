@@ -96,14 +96,28 @@ WSGI_APPLICATION = 'mysite.wsgi.application'
 #     }
 # }
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'haldiram',
+#         'USER': 'postgres',
+#         'PASSWORD': '12345678',
+#         'HOST': 'localhost',
+#         'PORT': '5432',
+#     }
+# }
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'haldiram',
-        'USER': 'postgres',
-        'PASSWORD': '12345678',
-        'HOST': 'localhost',
+        'NAME': 'haldiram_db_c9bq',
+        'USER': 'haldiram_db_c9bq_user',
+        'PASSWORD': 'HPLyxMpGZdz1ndd7xXHMQHR9f7Cj0jGe',
+        'HOST': 'dpg-d4anbg1r0fns73ee2640-a.oregon-postgres.render.com',
         'PORT': '5432',
+        'OPTIONS': {
+            'sslmode': 'require'
+        }
     }
 }
 

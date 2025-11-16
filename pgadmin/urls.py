@@ -15,7 +15,7 @@ urlpatterns = [
     path('delete-module/<int:module_id>/', views.delete_module_view, name='delete_module'),
     
     # Utility
-     path('get-table-columns/', views.get_table_columns, name='get_table_columns'),
+    #  path('get-table-columns/', views.get_table_columns, name='get_table_columns'),
     
     # Module-specific Knowledge Graph
     path('download-module-kg/<int:module_id>/', views.download_module_kg_csv, name='download_module_kg_csv'),
@@ -34,4 +34,7 @@ urlpatterns = [
     path('conversations/', views.get_conversations, name='get_conversations'),
     path('conversation/<int:conversation_id>/', views.load_conversation, name='load_conversation'),
     path('conversation/<int:conversation_id>/delete/', views.delete_conversation, name='delete_conversation'),
+     path('download-module-kg-csv/<int:module_id>/', views.download_module_kg_csv, name='download_module_kg_csv'),
+    path('upload-module-kg-csv/<int:module_id>/', views.upload_module_kg_csv, name='upload_module_kg_csv'),
+    path('get-table-columns/', views.get_table_columns_view, name='get_table_columns'),
 ]
