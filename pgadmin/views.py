@@ -23,6 +23,16 @@ from django.contrib import messages
 from django.db import connection as django_connection
 from .models import Module, Conversation, Message
 
+import logging
+import json
+import csv
+from django.shortcuts import render, redirect, get_object_or_404
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib import messages
+from django.db import connection as django_connection
+from .models import Module, Conversation, Message
+
 logger = logging.getLogger(__name__)
 logger = logging.getLogger(__name__)
 SESSION_STORE = {}
@@ -751,190 +761,157 @@ def chat_view(request, module_id):
 
 
 @csrf_exempt
+@csrf_exempt
 def chat_api(request):
-    """Handle chat messages with conversation persistence"""
-    if request.method != "POST":
-        return JsonResponse({"error": "Method not allowed"}, status=405)
+    """API endpoint for chat interactions"""
+    if request.method != 'POST':
+        return JsonResponse({"error": "POST required"}, status=405)
     
     try:
         data = json.loads(request.body)
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
-    
-    user_query = data.get("message", "").strip()
-    feedback = data.get("feedback", None)
-    conversation_id = data.get("conversation_id", None)
-    module_id = data.get("module_id", None)
-    
-    logger.info(f"📨 Chat API: conv_id={conversation_id}, module_id={module_id}, msg='{user_query[:50] if user_query else ''}', feedback={bool(feedback)}")
-    
-    if not user_query and not feedback:
-        return JsonResponse({"error": "Empty message"}, status=400)
-    
-    if not module_id:
-        return JsonResponse({"error": "Module ID required"}, status=400)
-    
-    # Ensure session exists
-    if not request.session.session_key:
-        request.session.create()
-    session_id = request.session.session_key
-    
-    # Get or create conversation
-    conversation = None
-    if conversation_id:
-        try:
-            conversation = Conversation.objects.get(id=conversation_id, session_id=session_id)
-            logger.info(f"✅ Using existing conversation {conversation.id}")
-        except Conversation.DoesNotExist:
-            logger.warning(f"⚠️ Conversation {conversation_id} not found")
+        user_message = data.get('message', '').strip()
+        conversation_id = data.get('conversation_id')
+        module_id = data.get('module_id')
+        feedback = data.get('feedback')
+        
+        logger.info(f"📨 Chat API called: message='{user_message}', conv_id={conversation_id}, module_id={module_id}")
+        
+        if not module_id:
+            return JsonResponse({"error": "module_id required"}, status=400)
+        
+        # Get or create conversation
+        if conversation_id:
+            try:
+                conversation = Conversation.objects.get(id=conversation_id)
+                logger.info(f"📂 Using existing conversation {conversation_id}")
+            except Conversation.DoesNotExist:
+                logger.warning(f"⚠️ Conversation {conversation_id} not found, creating new one")
+                conversation = None
+        else:
             conversation = None
-    
-    # Create new conversation if needed
-    if not conversation and user_query and not feedback:
-        try:
-            module = Module.objects.get(id=module_id)
+        
+        # Get module
+        user_name = request.session.get("user_name")
+        if not user_name:
+            return JsonResponse({"error": "Not authenticated"}, status=401)
+        
+        module = get_object_or_404(Module, id=module_id, user_name=user_name)
+        
+        # Create conversation if needed
+        if not conversation:
             conversation = Conversation.objects.create(
                 module=module,
-                session_id=session_id,
-                title=user_query[:50] + ('...' if len(user_query) > 50 else '')
+                session_id=f"conv_{Conversation.objects.filter(module=module).count() + 1}",
+                title=user_message[:50] if user_message else "New Chat"
             )
-            logger.info(f"✅ Created NEW conversation {conversation.id}: '{conversation.title}'")
-        except Module.DoesNotExist:
-            return JsonResponse({"error": "Module not found"}, status=404)
-    
-    # Error if feedback without conversation
-    if not conversation and feedback:
-        return JsonResponse({"error": "Invalid conversation state"}, status=400)
-    
-    # Session management
-    if conversation.id not in SESSION_STORE:
-        SESSION_STORE[conversation.id] = {
-            "entities": conversation.entities or {},
-            "history": list(conversation.messages.filter(is_user=True).values_list('content', flat=True)),
-            "thread_id": f"conv_{conversation.id}",
-            "last_query": None,
-            "pending_clarification": conversation.context.get("pending_clarification") if conversation.context else None,
-            "module_id": module_id
+            logger.info(f"✨ Created new conversation {conversation.id}")
+        
+        # Get session data from conversation
+        session_data = conversation.context or {
+            "entities": {},
+            "history": []
         }
-    
-    session_data = SESSION_STORE[conversation.id]
-    
-    if module_id:
-        session_data["module_id"] = module_id
-    
-    # Process request
-    try:
+        
+        # If feedback provided, it's a clarification response
         if feedback:
-            entity_type = feedback.get("entity_type")
-            feedback_type = feedback.get("type")
-            
-            if session_data.get("pending_clarification"):
-                feedback["clarification_context"] = {
-                    "table": session_data["pending_clarification"].get("table"),
-                    "column": session_data["pending_clarification"].get("column")
-                }
-            
-            if feedback_type == "value_selection":
-                selected_value = feedback.get("selected_option")
-                if entity_type and selected_value:
-                    session_data["entities"][entity_type] = selected_value
-            
-            elif feedback_type == "custom_input":
-                custom_value = feedback.get("custom_value")
-                if entity_type and custom_value:
-                    session_data["entities"][entity_type] = custom_value
-            
-            if feedback_type in ["value_selection", "custom_input"]:
-                selection_text = feedback.get("selected_option") or feedback.get("custom_value")
+            logger.info(f"🔄 Processing feedback: {feedback}")
+            # Don't save user message for feedback responses
+        else:
+            # Save user message
+            if user_message:
                 Message.objects.create(
                     conversation=conversation,
-                    content=f"Selected: {selection_text}",
-                    is_user=True,
-                    metadata={"type": "selection", "entity_type": entity_type}
+                    content=user_message,
+                    is_user=True
                 )
-            
-            original_query = session_data.get("last_query", "")
-            from .RAG_LLM.main import invoke_graph
-            result = invoke_graph(original_query, session_data, human_feedback=feedback)
-            session_data["pending_clarification"] = None
-            
-        else:
-            # New user message
-            user_message = Message.objects.create(
-                conversation=conversation,
-                content=user_query,
-                is_user=True
-            )
-            logger.info(f"💾 Saved user message to DB")
-            
-            session_data["last_query"] = user_query
-            from .RAG_LLM.main import invoke_graph
-            result = invoke_graph(user_query, session_data)
-            
-            if result.get("type") == "clarification":
-                session_data["pending_clarification"] = {
-                    "entity_type": result.get("entity_type"),
-                    "table": result.get("table"),
-                    "column": result.get("column"),
-                    "entity": result.get("entity")
-                }
-            
-            if result.get("type") != "clarification":
-                session_data["history"].append(user_query)
+                logger.info("💾 Saved user message to DB")
         
-        # Save assistant response
-        if result.get("type") == "response":
-            chart_data = result.get("chart_data")
-            Message.objects.create(
-                conversation=conversation,
-                content=result.get("message", ""),
-                is_user=False,
-                metadata={
-                    "entities": result.get("entities", {}),
-                    "chart": chart_data
-                }
-            )
-            logger.info(f"💾 Saved assistant message to DB")
+        # Call LangGraph - CORRECT PARAMETER ORDER
+        from pgadmin.RAG_LLM.main import invoke_graph
         
-        # Update session entities
-        if result.get("entities"):
-            for e_type, e_data in result["entities"].items():
-                if isinstance(e_data, dict):
-                    session_data["entities"][e_type] = e_data.get("value", e_data)
-                else:
-                    session_data["entities"][e_type] = e_data
+        result = invoke_graph(
+            user_query=user_message,
+            module_id=module_id,  # ← Pass module_id as integer
+            session_data=session_data,
+            feedback=feedback
+        )
         
-        # Update conversation
-        conversation.entities = session_data["entities"]
-        if not conversation.context:
-            conversation.context = {}
-        conversation.context.update({
-            "pending_clarification": session_data.get("pending_clarification"),
-            "last_query": session_data.get("last_query"),
-            "module_id": session_data.get("module_id")
-        })
+        # Update session data
+        updated_session_data = result.get("session_data", session_data)
+        conversation.context = updated_session_data
         
-        # Update title if still "New Chat"
-        if conversation.title == "New Chat" and conversation.messages.filter(is_user=True).count() > 0:
-            first_message = conversation.get_first_message()
-            conversation.title = first_message[:50] + ("..." if len(first_message) > 50 else "")
+        # Update conversation title if it's the first message
+        if conversation.messages.count() == 1 and user_message:
+            conversation.title = user_message[:50]
         
         conversation.save()
         logger.info(f"💾 Updated conversation {conversation.id}")
         
-        # Add conversation_id to response
-        result["conversation_id"] = conversation.id
+        # Prepare response based on result type
+        response_data = {
+            "conversation_id": conversation.id,
+            "type": result.get("type", "response")
+        }
         
-        return JsonResponse(result)
+        if result["type"] == "clarification":
+            # Clarification needed
+            response_data.update({
+                "message": result.get("message"),
+                "options": result.get("options", []),
+                "subtype": result.get("subtype"),
+                "entity": result.get("entity"),
+                "entity_type": result.get("entity_type"),
+                "table": result.get("table"),
+                "column": result.get("column")
+            })
+            
+        elif result["type"] == "response":
+            # Successful response
+            assistant_message = result.get("message", "Query completed successfully.")
+            
+            # Save assistant message
+            Message.objects.create(
+                conversation=conversation,
+                content=assistant_message,
+                is_user=False,
+                metadata=result.get("metadata", {})
+            )
+            logger.info("💾 Saved assistant message to DB")
+            
+            response_data.update({
+                "message": assistant_message,
+                "metadata": result.get("metadata", {})
+            })
+            
+        elif result["type"] == "error":
+            # Error response
+            error_message = result.get("message", "An error occurred")
+            
+            # Save error message
+            Message.objects.create(
+                conversation=conversation,
+                content=error_message,
+                is_user=False
+            )
+            
+            response_data.update({
+                "message": error_message
+            })
         
+        return JsonResponse(response_data)
+        
+    except json.JSONDecodeError:
+        logger.error("❌ Invalid JSON in request")
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    
     except Exception as e:
-        logger.error(f"❌ Error in chat_api: {str(e)}", exc_info=True)
+        logger.error(f"❌ Error in chat_api: {e}")
+        import traceback
+        traceback.print_exc()
         return JsonResponse({
             "type": "error",
-            "message": "I encountered an error processing your request. Please try again.",
-            "conversation_id": conversation.id if conversation else None
+            "message": f"Server error: {str(e)}"
         }, status=500)
-
 
 @csrf_exempt
 def get_conversations(request):

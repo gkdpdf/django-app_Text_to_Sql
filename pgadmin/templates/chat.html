@@ -215,6 +215,54 @@
             margin-bottom: 12px;
         }
 
+        .search-box-container {
+            margin-bottom: 12px;
+            padding: 12px;
+            background: #565869;
+            border-radius: 6px;
+        }
+
+        .search-box-label {
+            font-size: 13px;
+            color: #ececf1;
+            margin-bottom: 8px;
+        }
+
+        .search-input-wrapper {
+            display: flex;
+            gap: 8px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 8px 12px;
+            background: #40414f;
+            border: 1px solid #686b79;
+            border-radius: 4px;
+            color: #ececf1;
+            font-size: 14px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #19c37d;
+        }
+
+        .search-btn {
+            padding: 8px 16px;
+            background: #19c37d;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .search-btn:hover {
+            background: #1a9f6b;
+        }
+
         .options-list {
             display: grid;
             gap: 8px;
@@ -246,10 +294,6 @@
             padding: 20px;
             margin-top: 16px;
             max-width: 800px;
-        }
-
-        .chart-container canvas {
-            max-height: 400px;
         }
 
         .data-table {
@@ -353,20 +397,6 @@
             background: #686b79;
         }
 
-        .loading {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #8e8ea0;
-            animation: pulse 1.4s infinite ease-in-out;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 0.3; }
-            50% { opacity: 1; }
-        }
-
         .empty-state {
             text-align: center;
             color: #8e8ea0;
@@ -452,8 +482,8 @@
         const MODULE_ID = {{ module_id }};
         let currentConversationId = null;
         let pendingClarification = null;
+        let sessionData = null;
 
-        // Auto-resize textarea
         document.getElementById('messageInput').addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = (this.scrollHeight) + 'px';
@@ -467,10 +497,9 @@
         }
 
         function startNewChat() {
-            console.log('Starting new chat...');
-            
             currentConversationId = null;
             pendingClarification = null;
+            sessionData = null;
             
             document.getElementById('messagesContainer').innerHTML = `
                 <div class="message assistant-message">
@@ -517,7 +546,9 @@
                     body: JSON.stringify({
                         message: message,
                         conversation_id: currentConversationId,
-                        module_id: MODULE_ID
+                        module_id: MODULE_ID,
+                        session_data: sessionData,
+                        feedback: null
                     })
                 });
 
@@ -526,13 +557,13 @@
                 }
 
                 const data = await response.json();
-                console.log('Response:', data);
+                console.log('📥 Response:', data);
                 
                 handleResponse(data);
 
             } catch (error) {
                 console.error('Error:', error);
-                appendMessage('assistant', '❌ Sorry, something went wrong. Please try again.');
+                appendMessage('assistant', '❌ Sorry, something went wrong.');
             } finally {
                 input.disabled = false;
                 document.getElementById('sendBtn').disabled = false;
@@ -542,21 +573,24 @@
 
         function handleResponse(data) {
             if (data.conversation_id) {
-                const wasNewChat = !currentConversationId;
                 currentConversationId = data.conversation_id;
-                
-                if (wasNewChat) {
-                    console.log('New conversation created with ID:', currentConversationId);
-                }
+            }
+
+            if (data.session_data) {
+                sessionData = data.session_data;
             }
 
             if (data.type === 'clarification') {
                 handleClarification(data);
             } else if (data.type === 'response') {
-                appendMessage('assistant', data.message, data.metadata);
+                appendMessage('assistant', data.message);
                 
-                if (data.metadata && data.metadata.chart) {
-                    renderChart(data.metadata.chart);
+                if (data.sql) {
+                    appendSQL(data.sql);
+                }
+                
+                if (data.chart) {
+                    renderChart(data.chart);
                 }
             } else if (data.type === 'error') {
                 appendMessage('assistant', '❌ ' + data.message);
@@ -566,74 +600,72 @@
         }
 
         function handleClarification(data) {
-            pendingClarification = data;
+            console.log('🔔 Clarification:', data);
+            
+            pendingClarification = {
+                subtype: data.subtype,
+                entity: data.entity,
+                entity_type: data.entity_type,
+                clarification_context: data.clarification_context,
+                allow_custom: data.allow_custom || false
+            };
             
             let html = `<div class="clarification">
-                <div class="clarification-title">${escapeHtml(data.message)}</div>
-                <div class="options-list">`;
+                <div class="clarification-title">${escapeHtml(data.message)}</div>`;
             
-            data.options.forEach(option => {
-                let optionText;
-                if (typeof option === 'string') {
-                    optionText = option;
-                } else if (option.column) {
-                    optionText = `${option.column} (${option.table})`;
-                } else if (option.best_match) {
-                    optionText = option.best_match;
-                } else {
-                    optionText = JSON.stringify(option);
-                }
-                
+            // Add search box if custom values are allowed
+            if (data.allow_custom && data.subtype === 'value_selection') {
+                html += `<div class="search-box-container">
+                    <div class="search-box-label">🔍 Or search for a specific value:</div>
+                    <div class="search-input-wrapper">
+                        <input type="text" class="search-input" id="customSearchInput" placeholder="Type to search...">
+                        <button class="search-btn" onclick="searchCustomValue()">Search</button>
+                    </div>
+                </div>`;
+            }
+            
+            html += `<div class="options-list">`;
+            
+            data.options.forEach((option, index) => {
+                const optionText = String(option);
                 const escapedText = escapeHtml(optionText);
-                const encodedText = encodeURIComponent(optionText);
-                html += `<button class="option-btn" onclick='selectOption(decodeURIComponent("${encodedText}"), "${data.subtype}")'>${escapedText}</button>`;
+                html += `<button class="option-btn" onclick='selectOption(${index})'>${escapedText}</button>`;
             });
             
             html += `</div></div>`;
             
             appendRawHTML(html);
+            
+            window.currentOptions = data.options;
         }
 
-        async function selectOption(option, subtype) {
-            console.log('Selected:', option, 'Type:', subtype);
+        async function searchCustomValue() {
+            const input = document.getElementById('customSearchInput');
+            const customValue = input.value.trim();
             
-            document.querySelectorAll('.option-btn').forEach(btn => {
-                btn.disabled = true;
-                btn.style.opacity = '0.5';
-            });
-
-            let feedback;
-            
-            if (subtype === 'column') {
-                const match = option.match(/(.+) \((.+)\)/);
-                if (match) {
-                    feedback = {
-                        type: 'column_selection',
-                        entity: pendingClarification.entity,
-                        entity_type: pendingClarification.entity_type,
-                        selected_table: match[2],
-                        selected_column: match[1]
-                    };
-                } else {
-                    feedback = {
-                        type: 'column_selection',
-                        entity: pendingClarification.entity,
-                        entity_type: pendingClarification.entity_type,
-                        selected_column: option,
-                        selected_table: pendingClarification.table
-                    };
-                }
-            } else {
-                feedback = {
-                    type: 'value_selection',
-                    selected_option: option,
-                    entity_type: pendingClarification.entity_type,
-                    clarification_context: {
-                        table: pendingClarification.table,
-                        column: pendingClarification.column
-                    }
-                };
+            if (!customValue) {
+                alert('Please enter a search term');
+                return;
             }
+
+            console.log('🔍 Searching for custom value:', customValue);
+
+            // Disable search
+            input.disabled = true;
+            document.querySelector('.search-btn').disabled = true;
+            document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
+
+            appendMessage('user', `Searching for: ${customValue}`);
+
+            const feedback = {
+                type: 'custom_value',
+                custom_value: customValue,
+                entity: pendingClarification.entity,
+                entity_type: pendingClarification.entity_type,
+                clarification_context: pendingClarification.clarification_context
+            };
+
+            console.log('📤 Sending custom search:', feedback);
 
             try {
                 const response = await fetch('/chat/api/', {
@@ -646,6 +678,63 @@
                         message: '',
                         conversation_id: currentConversationId,
                         module_id: MODULE_ID,
+                        session_data: sessionData,
+                        feedback: feedback
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                handleResponse(data);
+
+            } catch (error) {
+                console.error('Error:', error);
+                appendMessage('assistant', '❌ Search failed.');
+                input.disabled = false;
+                document.querySelector('.search-btn').disabled = false;
+                document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = false);
+            }
+        }
+
+        async function selectOption(optionIndex) {
+            const selectedOption = window.currentOptions[optionIndex];
+            
+            console.log('✅ Selected:', selectedOption);
+            console.log('📋 Type:', pendingClarification.subtype);
+            
+            document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
+            if (document.querySelector('.search-input')) {
+                document.querySelector('.search-input').disabled = true;
+                document.querySelector('.search-btn').disabled = true;
+            }
+
+            appendMessage('user', selectedOption);
+
+            const feedback = {
+                type: pendingClarification.subtype,
+                selected_option: selectedOption,
+                entity: pendingClarification.entity,
+                entity_type: pendingClarification.entity_type,
+                clarification_context: pendingClarification.clarification_context
+            };
+
+            console.log('📤 Sending:', feedback);
+
+            try {
+                const response = await fetch('/chat/api/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        message: '',
+                        conversation_id: currentConversationId,
+                        module_id: MODULE_ID,
+                        session_data: sessionData,
                         feedback: feedback
                     })
                 });
@@ -659,16 +748,11 @@
                 
             } catch (error) {
                 console.error('Error:', error);
-                appendMessage('assistant', '❌ Sorry, something went wrong.');
-                
-                document.querySelectorAll('.option-btn').forEach(btn => {
-                    btn.disabled = false;
-                    btn.style.opacity = '1';
-                });
+                appendMessage('assistant', '❌ Error processing selection.');
             }
         }
 
-        function appendMessage(role, content, metadata) {
+        function appendMessage(role, content) {
             const container = document.getElementById('messagesContainer');
             const isUser = role === 'user';
             
@@ -688,6 +772,15 @@
             container.scrollTop = container.scrollHeight;
         }
 
+        function appendSQL(sql) {
+            const container = document.getElementById('messagesContainer');
+            const sqlDiv = document.createElement('div');
+            sqlDiv.className = 'sql-code';
+            sqlDiv.textContent = sql;
+            container.appendChild(sqlDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
         function appendRawHTML(html) {
             const container = document.getElementById('messagesContainer');
             const messageDiv = document.createElement('div');
@@ -704,12 +797,9 @@
         }
 
         function renderChart(chartData) {
-            console.log('Rendering chart:', chartData);
-            
             const container = document.getElementById('messagesContainer');
             const chartContainer = document.createElement('div');
             chartContainer.className = 'chart-container';
-            chartContainer.id = 'chart_' + Date.now();
             
             if (chartData.type === 'table') {
                 let html = '<div class="data-table"><table><thead><tr>';
@@ -729,75 +819,6 @@
                 html += '</tbody></table></div>';
                 
                 chartContainer.innerHTML = html;
-            } else {
-                chartContainer.innerHTML = '<canvas id="canvas_' + chartContainer.id + '"></canvas>';
-                container.appendChild(chartContainer);
-                
-                setTimeout(() => {
-                    const canvas = document.getElementById('canvas_' + chartContainer.id);
-                    if (!canvas) return;
-                    
-                    const ctx = canvas.getContext('2d');
-                    
-                    const colors = [
-                        'rgba(102, 126, 234, 0.8)',
-                        'rgba(118, 75, 162, 0.8)',
-                        'rgba(240, 147, 251, 0.8)',
-                        'rgba(245, 87, 108, 0.8)',
-                        'rgba(56, 239, 125, 0.8)'
-                    ];
-                    
-                    const datasets = chartData.datasets.map((dataset, index) => ({
-                        label: dataset.label,
-                        data: dataset.data,
-                        backgroundColor: chartData.type === 'pie' ? colors : colors[index % colors.length],
-                        borderColor: colors[index % colors.length],
-                        borderWidth: 2,
-                        fill: chartData.type === 'line' ? false : true
-                    }));
-                    
-                    new Chart(ctx, {
-                        type: chartData.type,
-                        data: {
-                            labels: chartData.labels,
-                            datasets: datasets
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: true,
-                            plugins: {
-                                legend: {
-                                    display: true,
-                                    position: 'top',
-                                    labels: {
-                                        color: '#ececf1'
-                                    }
-                                }
-                            },
-                            scales: chartData.type !== 'pie' ? {
-                                y: {
-                                    beginAtZero: true,
-                                    ticks: {
-                                        color: '#ececf1'
-                                    },
-                                    grid: {
-                                        color: '#444654'
-                                    }
-                                },
-                                x: {
-                                    ticks: {
-                                        color: '#ececf1'
-                                    },
-                                    grid: {
-                                        color: '#444654'
-                                    }
-                                }
-                            } : {}
-                        }
-                    });
-                }, 100);
-                
-                return;
             }
             
             container.appendChild(chartContainer);
@@ -808,13 +829,9 @@
             try {
                 const response = await fetch(`/conversations/?module_id=${MODULE_ID}`);
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
+                if (!response.ok) return;
                 
                 const data = await response.json();
-                console.log('Loaded conversations:', data);
-                
                 const list = document.getElementById('conversationsList');
                 
                 if (!data.conversations || data.conversations.length === 0) {
@@ -841,12 +858,9 @@
             try {
                 const response = await fetch(`/conversation/${id}/`);
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
+                if (!response.ok) return;
                 
                 const data = await response.json();
-                console.log('Loaded conversation:', data);
                 
                 currentConversationId = id;
                 document.getElementById('messagesContainer').innerHTML = '';
@@ -861,23 +875,21 @@
                 }
                 
                 data.messages.forEach(msg => {
-                    appendMessage(msg.is_user ? 'user' : 'assistant', msg.content, msg.metadata);
+                    appendMessage(msg.is_user ? 'user' : 'assistant', msg.content);
                     
-                    if (!msg.is_user && msg.metadata && msg.metadata.chart) {
-                        renderChart(msg.metadata.chart);
+                    if (!msg.is_user && msg.metadata) {
+                        if (msg.metadata.sql) appendSQL(msg.metadata.sql);
+                        if (msg.metadata.chart) renderChart(msg.metadata.chart);
                     }
                 });
                 
             } catch (error) {
                 console.error('Error loading conversation:', error);
-                appendMessage('assistant', '❌ Error loading conversation');
             }
         }
 
         async function deleteConversation(id) {
-            if (!confirm('Delete this conversation?')) {
-                return;
-            }
+            if (!confirm('Delete this conversation?')) return;
 
             try {
                 const response = await fetch(`/conversation/${id}/delete/`, {
@@ -887,9 +899,7 @@
                     }
                 });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
+                if (!response.ok) return;
 
                 if (id === currentConversationId) {
                     startNewChat();
@@ -899,7 +909,6 @@
 
             } catch (error) {
                 console.error('Error deleting conversation:', error);
-                alert('Error deleting conversation');
             }
         }
 
@@ -911,11 +920,11 @@
 
         function getCookie(name) {
             let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
+            if (document.cookie) {
                 const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                for (let cookie of cookies) {
+                    cookie = cookie.trim();
+                    if (cookie.startsWith(name + '=')) {
                         cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
                         break;
                     }
@@ -925,7 +934,6 @@
         }
 
         window.addEventListener('DOMContentLoaded', function() {
-            console.log('Page loaded. Module ID:', MODULE_ID);
             loadConversations();
         });
     </script>
