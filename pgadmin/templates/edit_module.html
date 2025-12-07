@@ -1,3 +1,6 @@
+<!-- IMPROVED edit_module.html with Expand/Collapse + Sticky Save Button -->
+<!-- Replace the entire file or merge these changes -->
+
 {% load dict_filters %}
 <!DOCTYPE html>
 <html lang="en">
@@ -25,7 +28,7 @@
             background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #f5576c);
             background-size: 400% 400%;
             animation: gradient 15s ease infinite;
-            padding: 40px 20px;
+            padding: 40px 20px 120px 20px; /* Extra bottom padding for sticky button */
         }
 
         .container {
@@ -35,6 +38,7 @@
             border-radius: 20px;
             padding: 40px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            margin-bottom: 100px; /* Space for sticky button */
         }
 
         h1 {
@@ -62,6 +66,55 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .section-title:hover {
+            color: #5568d3;
+        }
+
+        .collapse-icon {
+            font-size: 0.8em;
+            transition: transform 0.3s ease;
+        }
+
+        .collapse-icon.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .section-content {
+            max-height: 5000px;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+            opacity: 1;
+        }
+
+        .section-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+        }
+
+        /* STICKY SAVE BUTTON */
+        .sticky-save-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.95) 20%, rgba(255,255,255,1) 100%);
+            padding: 20px;
+            z-index: 1000;
+            border-top: 2px solid #e0e0e0;
+            backdrop-filter: blur(10px);
+        }
+
+        .sticky-save-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            gap: 15px;
+            justify-content: flex-end;
+            align-items: center;
         }
 
         .btn {
@@ -79,6 +132,7 @@
         .btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
         }
 
         .btn-success {
@@ -93,7 +147,7 @@
 
         .btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
         }
 
         .btn:disabled {
@@ -102,53 +156,90 @@
             transform: none;
         }
 
+        /* TABLE SELECTION - COLLAPSIBLE */
         .table-list {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 15px;
             margin-bottom: 20px;
         }
 
         .table-item {
             background: white;
-            padding: 15px;
             border-radius: 10px;
             border: 2px solid #e0e0e0;
             transition: all 0.3s ease;
+            overflow: hidden;
         }
 
         .table-item:hover {
             border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
         }
 
-        .table-item label {
+        .table-header {
+            padding: 15px;
+            cursor: pointer;
+            user-select: none;
             display: flex;
             align-items: center;
             gap: 10px;
-            cursor: pointer;
-            font-weight: 500;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
         }
 
-        .table-item input[type="checkbox"] {
+        .table-header:hover {
+            background: linear-gradient(135deg, #e8e9fa 0%, #f0f1ff 100%);
+        }
+
+        .table-header input[type="checkbox"] {
             width: 20px;
             height: 20px;
             cursor: pointer;
         }
 
+        .table-name {
+            flex: 1;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .table-expand-icon {
+            font-size: 1.2em;
+            color: #667eea;
+            transition: transform 0.3s ease;
+        }
+
+        .table-expand-icon.collapsed {
+            transform: rotate(-90deg);
+        }
+
         .columns-container {
-            margin-top: 10px;
-            padding-left: 30px;
-            display: none;
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 0;
+            transition: max-height 0.3s ease, padding 0.3s ease;
+        }
+
+        .columns-container:not(.show) {
+            max-height: 0;
+            overflow: hidden;
         }
 
         .columns-container.show {
-            display: block;
+            padding: 10px 15px 15px 15px;
+            border-top: 1px solid #e0e0e0;
         }
 
         .column-item {
-            padding: 5px 0;
+            padding: 8px 10px;
             font-size: 0.9em;
-            color: #666;
+            color: #555;
+            transition: background 0.2s ease;
+            border-radius: 5px;
+        }
+
+        .column-item:hover {
+            background: #f0f4ff;
         }
 
         .column-item label {
@@ -163,13 +254,60 @@
             height: 16px;
         }
 
-        .kg-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
+        /* KNOWLEDGE GRAPH - COLLAPSIBLE TABLES */
+        .kg-table-section {
+            margin-bottom: 30px;
             background: white;
             border-radius: 10px;
             overflow: hidden;
+            border: 2px solid #e0e0e0;
+        }
+
+        .kg-table-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .kg-table-header:hover {
+            background: linear-gradient(135deg, #5568d3 0%, #653b8d 100%);
+        }
+
+        .kg-table-header h3 {
+            flex: 1;
+            margin: 0;
+            font-size: 1.3em;
+        }
+
+        .kg-expand-icon {
+            font-size: 1.5em;
+            transition: transform 0.3s ease;
+        }
+
+        .kg-expand-icon.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .kg-table-content {
+            max-height: 2000px;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+            opacity: 1;
+        }
+
+        .kg-table-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+        }
+
+        .kg-table {
+            width: 100%;
+            border-collapse: collapse;
         }
 
         .kg-table th {
@@ -185,6 +323,10 @@
             border-bottom: 1px solid #e0e0e0;
         }
 
+        .kg-table tr:hover {
+            background: #f8f9fa;
+        }
+
         .kg-table input[type="text"],
         .kg-table textarea {
             width: 100%;
@@ -192,11 +334,44 @@
             border: 1px solid #ddd;
             border-radius: 5px;
             font-family: inherit;
+            transition: border-color 0.3s ease;
+        }
+
+        .kg-table input[type="text"]:focus,
+        .kg-table textarea:focus {
+            outline: none;
+            border-color: #667eea;
         }
 
         .kg-table textarea {
             min-height: 60px;
             resize: vertical;
+        }
+
+        .table-info-box {
+            background: #fff8dc;
+            border: 2px solid #ffd700;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px;
+        }
+
+        .table-info-label {
+            font-weight: 600;
+            color: #d4a017;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .table-info-textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ffd700;
+            border-radius: 8px;
+            font-family: inherit;
+            min-height: 80px;
+            resize: vertical;
+            background: white;
         }
 
         .loading {
@@ -252,7 +427,6 @@
             display: flex;
             gap: 15px;
             flex-wrap: wrap;
-            margin-top: 20px;
         }
 
         .info-box {
@@ -263,48 +437,50 @@
             margin-bottom: 20px;
         }
 
-        .dynamic-list {
-            margin-top: 20px;
-        }
-
-        .dynamic-item {
-            background: white;
-            padding: 15px;
-            border-radius: 10px;
+        /* Expand/Collapse All Buttons */
+        .expand-collapse-controls {
+            display: flex;
+            gap: 10px;
             margin-bottom: 15px;
-            border: 1px solid #e0e0e0;
         }
 
-        .dynamic-item input,
-        .dynamic-item textarea {
-            width: 100%;
-            padding: 8px;
-            margin-bottom: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-family: inherit;
-        }
-
-        .remove-btn {
-            background: #f5576c;
-            color: white;
+        .expand-collapse-btn {
             padding: 8px 15px;
-            border: none;
+            background: transparent;
+            border: 1px solid #667eea;
+            color: #667eea;
             border-radius: 5px;
             cursor: pointer;
             font-size: 0.9em;
+            transition: all 0.3s ease;
         }
 
-        .add-btn {
-            background: #38ef7d;
+        .expand-collapse-btn:hover {
+            background: #667eea;
             color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
         }
 
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #5568d3;
+        }
+
+        /* Relationship items */
         .relationship-item {
             background: white;
             padding: 20px;
@@ -380,30 +556,46 @@
             color: #667eea;
         }
 
-        .table-info-box {
-            background: #fff8dc;
-            border: 2px solid #ffd700;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
+        .dynamic-list {
+            margin-top: 20px;
         }
 
-        .table-info-label {
-            font-weight: 600;
-            color: #d4a017;
-            margin-bottom: 8px;
-            display: block;
-        }
-
-        .table-info-textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #ffd700;
-            border-radius: 8px;
-            font-family: inherit;
-            min-height: 80px;
-            resize: vertical;
+        .dynamic-item {
             background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .dynamic-item input,
+        .dynamic-item textarea {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: inherit;
+        }
+
+        .remove-btn {
+            background: #f5576c;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+
+        .add-btn {
+            background: #38ef7d;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
         }
 
         @media (max-width: 968px) {
@@ -420,6 +612,13 @@
             .relationship-center {
                 order: -1;
                 min-width: auto;
+            }
+            .sticky-save-content {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .sticky-save-content .btn {
+                width: 100%;
             }
         }
     </style>
@@ -438,742 +637,791 @@
 
             <!-- TABLE SELECTION SECTION -->
             <div class="section">
-                <div class="section-title">
+                <div class="section-title" onclick="toggleSection('tableSection')">
+                    <span class="collapse-icon" id="tableSection-icon">▼</span>
                     📊 Table & Column Selection
                 </div>
 
-                <div class="info-box">
-                    ℹ️ Select tables and their columns. After selecting, click "Generate with AI" to auto-fill descriptions.
-                </div>
+                <div class="section-content" id="tableSection-content">
+                    <div class="info-box">
+                        ℹ️ Select tables and their columns. After selecting, click "Update" to auto-fill descriptions.
+                    </div>
 
-                <div class="table-list">
-                    {% for table in tables %}
-                        <div class="table-item">
-                            <label>
-                                <input 
-                                    type="checkbox" 
-                                    name="selected_tables" 
-                                    value="{{ table }}"
-                                    {% if table in selected_tables %}checked{% endif %}
-                                    onchange="toggleTableColumns('{{ table }}', this.checked)"
-                                >
-                                <strong>{{ table }}</strong>
-                            </label>
-                            <div class="columns-container" id="columns_{{ table }}" {% if table in selected_tables %}style="display:block"{% endif %}>
-                                <small style="color: #999; display: block; margin: 10px 0 5px 0;">Loading columns...</small>
+                    <div class="expand-collapse-controls">
+                        <button type="button" class="expand-collapse-btn" onclick="expandAllTables()">
+                            ⬇️ Expand All Tables
+                        </button>
+                        <button type="button" class="expand-collapse-btn" onclick="collapseAllTables()">
+                            ⬆️ Collapse All Tables
+                        </button>
+                    </div>
+
+                    <div class="table-list">
+                        {% for table in tables %}
+                            <div class="table-item">
+                                <div class="table-header" onclick="toggleTableExpand('{{ table }}')">
+                                    <input 
+                                        type="checkbox" 
+                                        name="selected_tables" 
+                                        value="{{ table }}"
+                                        {% if table in selected_tables %}checked{% endif %}
+                                        onchange="toggleTableColumns('{{ table }}', this.checked)"
+                                        onclick="event.stopPropagation()"
+                                    >
+                                    <span class="table-name">{{ table }}</span>
+                                    <span class="table-expand-icon" id="expand_{{ table }}">▼</span>
+                                </div>
+                                <div class="columns-container" id="columns_{{ table }}" {% if table in selected_tables %}style="display:block"{% endif %}>
+                                    <small style="color: #999; display: block; margin: 10px 0 5px 0;">Loading columns...</small>
+                                </div>
                             </div>
-                        </div>
-                    {% endfor %}
-                </div>
+                        {% endfor %}
+                    </div>
 
-                <div class="button-group">
-                    <button type="button" class="btn btn-success" onclick="generateWithAI()" id="generateBtn">
-                        Update
-                    </button>
-                    <button type="button" class="btn btn-secondary" onclick="selectAllTables()">
-                        ✓ Select All Tables
-                    </button>
-                    <button type="button" class="btn btn-secondary" onclick="deselectAllTables()">
-                        ✗ Deselect All
-                    </button>
-                </div>
+                    <div class="button-group">
+                        <button type="button" class="btn btn-success" onclick="generateWithAI()" id="generateBtn">
+                            🤖 Update
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="selectAllTables()">
+                            ✓ Select All Tables
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="deselectAllTables()">
+                            ✗ Deselect All
+                        </button>
+                    </div>
 
-                <div class="loading" id="loadingBox">
-                    <div class="spinner"></div>
-                    <p>Generating knowledge graph with AI... This may take a minute.</p>
+                    <div class="loading" id="loadingBox">
+                        <div class="spinner"></div>
+                        <p>Generating knowledge graph with AI... This may take a minute.</p>
+                    </div>
                 </div>
             </div>
 
             <!-- KNOWLEDGE GRAPH SECTION -->
             <div class="section">
-                <div class="section-title">
+                <div class="section-title" onclick="toggleSection('kgSection')">
+                    <span class="collapse-icon" id="kgSection-icon">▼</span>
                     🧠 Knowledge Graph
                     <div style="margin-left: auto; display: flex; gap: 10px;">
-                        <a href="/download-module-kg-csv/{{ module.id }}/" class="btn btn-secondary" style="font-size: 0.9em;">
+                        <a href="/download-module-kg-csv/{{ module.id }}/" class="btn btn-secondary" style="font-size: 0.9em;" onclick="event.stopPropagation()">
                             📥 Download CSV
                         </a>
-                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('uploadKGFile').click()" style="font-size: 0.9em;">
+                        <button type="button" class="btn btn-secondary" onclick="event.stopPropagation(); document.getElementById('uploadKGFile').click()" style="font-size: 0.9em;">
                             📤 Upload CSV
                         </button>
                         <input type="file" id="uploadKGFile" accept=".csv" style="display: none;" onchange="uploadKG(this)">
                     </div>
                 </div>
 
-                <div id="knowledgeGraphContainer">
-                    {% if knowledge_data %}
-                        {% for table, columns in knowledge_data.items %}
-                            <div style="margin-bottom: 40px;">
-                                <h3 style="color: #667eea; margin-top: 30px; margin-bottom: 15px;">📋 {{ table }}</h3>
-                                
-                                <!-- TABLE INFO TEXTBOX -->
-                                <div class="table-info-box">
-                                    <label class="table-info-label">
-                                        📝 Table Description (What does this table represent?)
-                                    </label>
-                                    <textarea 
-                                        name="table_info__{{ table }}"
-                                        class="table-info-textarea"
-                                        placeholder="Describe the purpose of this table, what data it contains, and how it's used..."
-                                    >{{ table_info_map|get_item:table }}</textarea>
-                                </div>
-                                
-                                <!-- COLUMNS TABLE -->
-                                <table class="kg-table">
-                                    <thead>
-                                        <tr>
-                                            <th style="width: 25%;">Column Name</th>
-                                            <th style="width: 50%;">Description</th>
-                                            <th style="width: 25%;">Data Type / Category</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for column, info in columns.items %}
-                                            {% if column != 'TABLE_INFO' %}
+                <div class="section-content" id="kgSection-content">
+                    <div class="expand-collapse-controls">
+                        <button type="button" class="expand-collapse-btn" onclick="expandAllKGTables()">
+                            ⬇️ Expand All
+                        </button>
+                        <button type="button" class="expand-collapse-btn" onclick="collapseAllKGTables()">
+                            ⬆️ Collapse All
+                        </button>
+                    </div>
+
+                    <div id="knowledgeGraphContainer">
+                        {% if knowledge_data %}
+                            {% for table, columns in knowledge_data.items %}
+                                <div class="kg-table-section">
+                                    <div class="kg-table-header" onclick="toggleKGTable('{{ table }}')">
+                                        <h3>📋 {{ table }}</h3>
+                                        <span class="kg-expand-icon" id="kg_expand_{{ table }}">▼</span>
+                                    </div>
+                                    
+                                    <div class="kg-table-content" id="kg_content_{{ table }}">
+                                        <!-- TABLE INFO TEXTBOX -->
+                                        <div class="table-info-box">
+                                            <label class="table-info-label">
+                                                📝 Table Description (What does this table represent?)
+                                            </label>
+                                            <textarea 
+                                                name="table_info__{{ table }}"
+                                                class="table-info-textarea"
+                                                placeholder="Describe the purpose of this table, what data it contains, and how it's used..."
+                                            >{{ table_info_map|get_item:table }}</textarea>
+                                        </div>
+                                        
+                                        <!-- COLUMNS TABLE -->
+                                        <table class="kg-table">
+                                            <thead>
                                                 <tr>
-                                                    <td><strong>{{ column }}</strong></td>
-                                                    <td>
-                                                        <textarea 
-                                                            name="kg_desc__{{ table }}__{{ column }}" 
-                                                            placeholder="Describe what this column represents..."
-                                                        >{{ info.desc }}</textarea>
-                                                    </td>
-                                                    <td>
-                                                        <input 
-                                                            type="text" 
-                                                            name="kg_datatype__{{ table }}__{{ column }}" 
-                                                            placeholder="e.g., identifier, text, number..."
-                                                            value="{{ info.datatype }}"
-                                                        >
-                                                    </td>
+                                                    <th style="width: 25%;">Column Name</th>
+                                                    <th style="width: 50%;">Description</th>
+                                                    <th style="width: 25%;">Data Type / Category</th>
                                                 </tr>
-                                            {% endif %}
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% endfor %}
-                    {% else %}
-                        <p style="text-align: center; color: #999; padding: 40px;">
-                            No tables selected yet. Select tables above to see their columns here.
-                        </p>
-                    {% endif %}
+                                            </thead>
+                                            <tbody>
+                                                {% for column, info in columns.items %}
+                                                    {% if column != 'TABLE_INFO' %}
+                                                        <tr>
+                                                            <td><strong>{{ column }}</strong></td>
+                                                            <td>
+                                                                <textarea 
+                                                                    name="kg_desc__{{ table }}__{{ column }}" 
+                                                                    placeholder="Describe what this column represents..."
+                                                                >{{ info.desc }}</textarea>
+                                                            </td>
+                                                            <td>
+                                                                <input 
+                                                                    type="text" 
+                                                                    name="kg_datatype__{{ table }}__{{ column }}" 
+                                                                    placeholder="e.g., identifier, text, number..."
+                                                                    value="{{ info.datatype }}"
+                                                                >
+                                                            </td>
+                                                        </tr>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <p style="text-align: center; color: #999; padding: 40px;">
+                                No tables selected yet. Select tables above to see their columns here.
+                            </p>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
 
             <!-- RELATIONSHIPS/JOINS SECTION -->
             <div class="section">
-                <div class="section-title">
+                <div class="section-title" onclick="toggleSection('relSection')">
+                    <span class="collapse-icon" id="relSection-icon">▼</span>
                     🔗 Table Relationships / Joins
                 </div>
 
-                <div class="info-box">
-                    ℹ️ Define how tables relate to each other. This helps generate better SQL queries with proper joins.
-                    <br><strong>Example:</strong> customers (customer_id) → One-to-Many → orders (customer_id)
-                </div>
+                <div class="section-content" id="relSection-content">
+                    <div class="info-box">
+                        ℹ️ Define how tables relate to each other. This helps generate better SQL queries with proper joins.
+                        <br><strong>Example:</strong> customers (customer_id) → One-to-Many → orders (customer_id)
+                    </div>
 
-                <div class="dynamic-list" id="relationshipsList">
-                    {% for rel in relationships %}
-                        <div class="relationship-item">
-                            <div class="relationship-grid">
-                                <!-- Left Side -->
-                                <div class="relationship-side">
-                                    <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Left Table</label>
-                                    <select name="rel_left_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'left')">
-                                        <option value="">Select table...</option>
-                                        {% for table in selected_tables %}
-                                            <option value="{{ table }}" {% if rel.left_table == table %}selected{% endif %}>{{ table }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    
-                                    <label style="font-size: 0.85em; color: #666; margin: 10px 0 5px 0; display: block;">Column</label>
-                                    <select name="rel_left_column" class="rel-select rel-column-select" data-value="{{ rel.left_column }}">
-                                        <option value="">Select column...</option>
-                                    </select>
+                    <div class="dynamic-list" id="relationshipsList">
+                        {% for rel in relationships %}
+                            <div class="relationship-item">
+                                <div class="relationship-grid">
+                                    <!-- Left Side -->
+                                    <div class="relationship-side">
+                                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Left Table</label>
+                                        <select name="rel_left_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'left')">
+                                            <option value="">Select table...</option>
+                                            {% for table in selected_tables %}
+                                                <option value="{{ table }}" {% if rel.left_table == table %}selected{% endif %}>{{ table }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        
+                                        <label style="font-size: 0.85em; color: #666; margin: 10px 0 5px 0; display: block;">Column</label>
+                                        <select name="rel_left_column" class="rel-select rel-column-select" data-value="{{ rel.left_column }}">
+                                            <option value="">Select column...</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Relationship Type -->
+                                    <div class="relationship-center">
+                                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Relationship</label>
+                                        <select name="rel_type" class="rel-type-select">
+                                            <option value="one-to-one" {% if rel.type == 'one-to-one' %}selected{% endif %}>1:1 (One to One)</option>
+                                            <option value="one-to-many" {% if rel.type == 'one-to-many' %}selected{% endif %}>1:N (One to Many)</option>
+                                            <option value="many-to-one" {% if rel.type == 'many-to-one' %}selected{% endif %}>N:1 (Many to One)</option>
+                                            <option value="many-to-many" {% if rel.type == 'many-to-many' %}selected{% endif %}>N:N (Many to Many)</option>
+                                        </select>
+                                        <div class="rel-arrow">↔️</div>
+                                    </div>
+
+                                    <!-- Right Side -->
+                                    <div class="relationship-side">
+                                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Right Table</label>
+                                        <select name="rel_right_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'right')">
+                                            <option value="">Select table...</option>
+                                            {% for table in selected_tables %}
+                                                <option value="{{ table }}" {% if rel.right_table == table %}selected{% endif %}>{{ table }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        
+                                        <label style="font-size: 0.85em; color: #666; margin: 10px 0 5px 0; display: block;">Column</label>
+                                        <select name="rel_right_column" class="rel-select rel-column-select" data-value="{{ rel.right_column }}">
+                                            <option value="">Select column...</option>
+                                        </select>
+                                    </div>
                                 </div>
 
-                                <!-- Relationship Type -->
-                                <div class="relationship-center">
-                                    <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Relationship</label>
-                                    <select name="rel_type" class="rel-type-select">
-                                        <option value="one-to-one" {% if rel.type == 'one-to-one' %}selected{% endif %}>1:1 (One to One)</option>
-                                        <option value="one-to-many" {% if rel.type == 'one-to-many' %}selected{% endif %}>1:N (One to Many)</option>
-                                        <option value="many-to-one" {% if rel.type == 'many-to-one' %}selected{% endif %}>N:1 (Many to One)</option>
-                                        <option value="many-to-many" {% if rel.type == 'many-to-many' %}selected{% endif %}>N:N (Many to Many)</option>
-                                    </select>
-                                    <div class="rel-arrow">↔️</div>
-                                </div>
-
-                                <!-- Right Side -->
-                                <div class="relationship-side">
-                                    <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Right Table</label>
-                                    <select name="rel_right_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'right')">
-                                        <option value="">Select table...</option>
-                                        {% for table in selected_tables %}
-                                            <option value="{{ table }}" {% if rel.right_table == table %}selected{% endif %}>{{ table }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    
-                                    <label style="font-size: 0.85em; color: #666; margin: 10px 0 5px 0; display: block;">Column</label>
-                                    <select name="rel_right_column" class="rel-select rel-column-select" data-value="{{ rel.right_column }}">
-                                        <option value="">Select column...</option>
-                                    </select>
-                                </div>
+                                <button type="button" class="remove-btn" onclick="removeItem(this)" style="margin-top: 15px;">🗑️ Remove Relationship</button>
                             </div>
+                        {% endfor %}
+                    </div>
 
-                            <button type="button" class="remove-btn" onclick="removeItem(this)" style="margin-top: 15px;">🗑️ Remove Relationship</button>
-                        </div>
-                    {% endfor %}
+                    <button type="button" class="add-btn" onclick="addRelationship()">+ Add Relationship</button>
                 </div>
-
-                <button type="button" class="add-btn" onclick="addRelationship()">+ Add Relationship</button>
             </div>
 
             <!-- RCA SECTION -->
             <div class="section">
-                <div class="section-title">
+                <div class="section-title" onclick="toggleSection('rcaSection')">
+                    <span class="collapse-icon collapsed" id="rcaSection-icon">▼</span>
                     📌 Root Cause Analysis (RCA) Guidelines
                 </div>
-                <div class="dynamic-list" id="rcaList">
-                    {% for rca in rca_list %}
-                        <div class="dynamic-item">
-                            <input type="text" name="rca_title" placeholder="RCA Title" value="{{ rca.title }}">
-                            <textarea name="rca_content" placeholder="RCA Content" rows="3">{{ rca.content }}</textarea>
-                            <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
-                        </div>
-                    {% endfor %}
+                <div class="section-content collapsed" id="rcaSection-content">
+                    <div class="dynamic-list" id="rcaList">
+                        {% for rca in rca_list %}
+                            <div class="dynamic-item">
+                                <input type="text" name="rca_title" placeholder="RCA Title" value="{{ rca.title }}">
+                                <textarea name="rca_content" placeholder="RCA Content" rows="3">{{ rca.content }}</textarea>
+                                <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <button type="button" class="add-btn" onclick="addRCA()">+ Add RCA</button>
                 </div>
-                <button type="button" class="add-btn" onclick="addRCA()">+ Add RCA</button>
             </div>
 
             <!-- POS TAGGING SECTION -->
             <div class="section">
-                <div class="section-title">
+                <div class="section-title" onclick="toggleSection('posSection')">
+                    <span class="collapse-icon collapsed" id="posSection-icon">▼</span>
                     🏷️ POS Tagging / Entity References
                 </div>
-                <div class="dynamic-list" id="posList">
-                    {% for pos in pos_tagging %}
-                        <div class="dynamic-item">
-                            <input type="text" name="pos_name" placeholder="Entity Name" value="{{ pos.name }}">
-                            <input type="text" name="pos_reference" placeholder="Reference/Synonym" value="{{ pos.reference }}">
-                            <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
-                        </div>
-                    {% endfor %}
+                <div class="section-content collapsed" id="posSection-content">
+                    <div class="dynamic-list" id="posList">
+                        {% for pos in pos_tagging %}
+                            <div class="dynamic-item">
+                                <input type="text" name="pos_name" placeholder="Entity Name" value="{{ pos.name }}">
+                                <input type="text" name="pos_reference" placeholder="Reference/Synonym" value="{{ pos.reference }}">
+                                <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <button type="button" class="add-btn" onclick="addPOS()">+ Add Entity</button>
                 </div>
-                <button type="button" class="add-btn" onclick="addPOS()">+ Add Entity</button>
             </div>
 
             <!-- METRICS SECTION -->
             <div class="section">
-                <div class="section-title">
+                <div class="section-title" onclick="toggleSection('metricsSection')">
+                    <span class="collapse-icon collapsed" id="metricsSection-icon">▼</span>
                     📊 Metrics / KPIs
                 </div>
-                <div class="dynamic-list" id="metricsList">
-                    {% for metric_name, metric_desc in metrics_data.items %}
-                        <div class="dynamic-item">
-                            <input type="text" name="metric_name" placeholder="Metric Name" value="{{ metric_name }}">
-                            <textarea name="metric_desc" placeholder="Metric Description" rows="2">{{ metric_desc }}</textarea>
-                            <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
-                        </div>
-                    {% endfor %}
+                <div class="section-content collapsed" id="metricsSection-content">
+                    <div class="dynamic-list" id="metricsList">
+                        {% for metric_name, metric_desc in metrics_data.items %}
+                            <div class="dynamic-item">
+                                <input type="text" name="metric_name" placeholder="Metric Name" value="{{ metric_name }}">
+                                <textarea name="metric_desc" placeholder="Metric Description" rows="2">{{ metric_desc }}</textarea>
+                                <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <button type="button" class="add-btn" onclick="addMetric()">+ Add Metric</button>
                 </div>
-                <button type="button" class="add-btn" onclick="addMetric()">+ Add Metric</button>
             </div>
 
             <!-- EXTRA SUGGESTIONS SECTION -->
             <div class="section">
-                <div class="section-title">
+                <div class="section-title" onclick="toggleSection('extraSection')">
+                    <span class="collapse-icon collapsed" id="extraSection-icon">▼</span>
                     💡 Extra Suggestions
                 </div>
-                <textarea 
-                    name="extra_suggestions" 
-                    rows="5" 
-                    placeholder="Any additional context, notes, or suggestions for query processing..."
-                    style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit;"
-                >{{ extra_suggestions }}</textarea>
-            </div>
-
-            <!-- SAVE BUTTON -->
-            <div class="button-group">
-                <button type="submit" class="btn btn-primary">💾 Save All Changes</button>
-                <a href="{% url 'dashboard' %}" class="btn btn-secondary">← Back to Dashboard</a>
-                <a href="{% url 'chat_module' module.id %}" class="btn btn-success">💬 Go to Chat</a>
+                <div class="section-content collapsed" id="extraSection-content">
+                    <textarea 
+                        name="extra_suggestions" 
+                        rows="5" 
+                        placeholder="Any additional context, notes, or suggestions for query processing..."
+                        style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit;"
+                    >{{ extra_suggestions }}</textarea>
+                </div>
             </div>
         </form>
     </div>
 
-        
-<script>
-    let selectedColumns = {};
-    let loadedTables = new Set();
+    <!-- STICKY SAVE BAR -->
+    <div class="sticky-save-bar">
+        <div class="sticky-save-content">
+            <a href="{% url 'dashboard' %}" class="btn btn-secondary">← Back to Dashboard</a>
+            <a href="{% url 'chat_module' module.id %}" class="btn btn-success">💬 Go to Chat</a>
+            <button type="button" class="btn btn-primary" onclick="document.getElementById('mainForm').submit()">
+                💾 Save All Changes
+            </button>
+        </div>
+    </div>
 
-    // Initialize on page load
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log('🚀 Page loaded, initializing...');
-        
-        // Pre-load saved column selections if they exist
-        try {
-            const savedColumns = {{ selected_columns|safe }};
-            if (savedColumns && typeof savedColumns === 'object') {
-                selectedColumns = savedColumns;
-                console.log('💾 Loaded saved selections:', selectedColumns);
-            }
-        } catch (e) {
-            console.warn('No saved columns or error loading:', e);
-            selectedColumns = {};
+    <script>
+        let selectedColumns = {};
+        let loadedTables = new Set();
+
+        // Toggle section expand/collapse
+        function toggleSection(sectionId) {
+            const content = document.getElementById(sectionId + '-content');
+            const icon = document.getElementById(sectionId + '-icon');
+            
+            content.classList.toggle('collapsed');
+            icon.classList.toggle('collapsed');
         }
-        
-        // Load columns for already selected tables
-        const selectedTableCheckboxes = document.querySelectorAll('input[name="selected_tables"]:checked');
-        console.log(`Found ${selectedTableCheckboxes.length} pre-selected tables`);
-        
-        selectedTableCheckboxes.forEach(checkbox => {
-            const tableName = checkbox.value;
-            console.log(`Loading columns for pre-selected table: ${tableName}`);
-            loadTableColumns(tableName, true);
-        });
 
-        // Load columns for existing relationships
-        loadExistingRelationshipColumns();
-    });
-
-    // Load columns for existing relationships
-    function loadExistingRelationshipColumns() {
-        document.querySelectorAll('.relationship-item').forEach(item => {
-            const leftTableSelect = item.querySelector('select[name="rel_left_table"]');
-            const rightTableSelect = item.querySelector('select[name="rel_right_table"]');
-            const leftColumnSelect = item.querySelector('select[name="rel_left_column"]');
-            const rightColumnSelect = item.querySelector('select[name="rel_right_column"]');
-            
-            const savedLeftColumn = leftColumnSelect.getAttribute('data-value');
-            const savedRightColumn = rightColumnSelect.getAttribute('data-value');
-            
-            if (leftTableSelect.value) {
-                loadColumnsForRelationship(leftTableSelect, 'left').then(() => {
-                    if (savedLeftColumn) {
-                        leftColumnSelect.value = savedLeftColumn;
-                    }
-                });
-            }
-            
-            if (rightTableSelect.value) {
-                loadColumnsForRelationship(rightTableSelect, 'right').then(() => {
-                    if (savedRightColumn) {
-                        rightColumnSelect.value = savedRightColumn;
-                    }
-                });
-            }
-        });
-    }
-
-    // Load table columns when a table is checked
-    async function loadTableColumns(tableName, isChecked) {
-        console.log(`📊 loadTableColumns called: ${tableName}, checked: ${isChecked}`);
-        
-        if (isChecked) {
-            // Only load if not already loaded
-            if (!loadedTables.has(tableName)) {
-                try {
-                    const container = document.getElementById(`columns_${tableName}`);
-                    if (!container) {
-                        console.error(`❌ Container not found for ${tableName}`);
-                        return;
-                    }
-                    
-                    // Show loading state
-                    container.innerHTML = '<small style="color: #667eea; padding: 10px;">⏳ Loading columns...</small>';
-                    container.classList.add('show');
-                    container.style.display = 'block';
-
-                    console.log(`🌐 Fetching columns for ${tableName}...`);
-                    const response = await fetch(`/get-table-columns/?table=${tableName}`);
-                    
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
-                    
-                    const data = await response.json();
-                    console.log(`✅ Received data for ${tableName}:`, data);
-                    
-                    if (data.columns && data.columns.length > 0) {
-                        // Check if we have saved selections for this table
-                        const savedCols = selectedColumns[tableName] || [];
-                        if (savedCols.length === 0 && !selectedColumns.hasOwnProperty(tableName)) {
-                        selectedColumns[tableName] = data.columns.map(col => col.name);
-                        console.log(`No saved selections, selecting all ${data.columns.length} columns`);
-                        }
-                        // If no saved selections, select all by default
-                         else {
-                            console.log(`Using saved selections: ${savedCols.length} columns`);
-                        }
-                        
-                        let html = '<div style="margin-top: 10px; padding: 0 10px;">';
-                        html += '<small style="color: #999; display: block; margin-bottom: 8px;">Select columns:</small>';
-                        
-                        data.columns.forEach(col => {
-                            const colId = `col_${tableName}_${col.name}`;
-                            const isSelected = selectedColumns[tableName] && selectedColumns[tableName].includes(col.name);
-                            
-                            html += `
-                                <div class="column-item">
-                                    <label>
-                                        <input 
-                                            type="checkbox" 
-                                            id="${colId}"
-                                            value="${col.name}"
-                                            ${isSelected ? 'checked' : ''}
-                                            onchange="toggleColumn('${tableName}', '${col.name}', this.checked)"
-                                        >
-                                        <span>${col.name}</span>
-                                    </label>
-                                </div>
-                            `;
-                        });
-                        html += '</div>';
-                        
-                        container.innerHTML = html;
-                        loadedTables.add(tableName);
-                        console.log(`✅ Successfully rendered ${data.columns.length} columns for ${tableName}`);
-                        console.log(`   Selected: ${selectedColumns[tableName].length} columns`);
-                    } else {
-                        container.innerHTML = '<small style="color: #f5576c; padding: 10px;">No columns found</small>';
-                        console.warn(`⚠️ No columns returned for ${tableName}`);
-                    }
-                } catch (error) {
-                    console.error(`❌ Error loading columns for ${tableName}:`, error);
-                    const container = document.getElementById(`columns_${tableName}`);
-                    if (container) {
-                        container.innerHTML = `<small style="color: #f5576c; padding: 10px;">❌ Error: ${error.message}</small>`;
-                    }
-                }
-            } else {
-                // Already loaded, just show
-                const container = document.getElementById(`columns_${tableName}`);
-                if (container) {
-                    container.classList.add('show');
-                    container.style.display = 'block';
-                    console.log(`✓ Table ${tableName} already loaded, showing container`);
-                }
-            }
-        } else {
-            // Unchecking the table - hide but don't delete
+        // Toggle table expand in table selection
+        function toggleTableExpand(tableName) {
             const container = document.getElementById(`columns_${tableName}`);
-            if (container) {
+            const icon = document.getElementById(`expand_${tableName}`);
+            
+            if (container.classList.contains('show')) {
                 container.classList.remove('show');
-                container.style.display = 'none';
-            }
-            console.log(`Hiding columns for ${tableName}`);
-        }
-    }
-
-    // Toggle table columns visibility
-    function toggleTableColumns(tableName, isChecked) {
-        console.log(`🔄 Toggle table: ${tableName}, checked: ${isChecked}`);
-        loadTableColumns(tableName, isChecked);
-    }
-
-    // Toggle individual column selection
-    function toggleColumn(tableName, columnName, isChecked) {
-        if (!selectedColumns[tableName]) {
-            selectedColumns[tableName] = [];
-        }
-        
-        if (isChecked) {
-            if (!selectedColumns[tableName].includes(columnName)) {
-                selectedColumns[tableName].push(columnName);
-            }
-        } else {
-            selectedColumns[tableName] = selectedColumns[tableName].filter(c => c !== columnName);
-        }
-        console.log(`Column ${columnName} in ${tableName} is now ${isChecked ? 'selected' : 'deselected'}`);
-        console.log(`Total selected in ${tableName}: ${selectedColumns[tableName].length}`);
-    }
-
-    // Generate with AI
-    async function generateWithAI() {
-        const selectedTables = Array.from(document.querySelectorAll('input[name="selected_tables"]:checked'))
-            .map(cb => cb.value);
-        
-        console.log('🤖 Generate with AI clicked');
-        console.log('Selected tables:', selectedTables);
-        console.log('Selected columns:', selectedColumns);
-        
-        if (selectedTables.length === 0) {
-            showAlert('Please select at least one table.', 'error');
-            return;
-        }
-
-        const tablesWithoutColumns = [];
-        for (const table of selectedTables) {
-            if (!selectedColumns[table] || selectedColumns[table].length === 0) {
-                tablesWithoutColumns.push(table);
-            }
-        }
-
-        if (tablesWithoutColumns.length > 0) {
-            showAlert(`Please select columns for: ${tablesWithoutColumns.join(', ')}`, 'error');
-            return;
-        }
-
-        const generateBtn = document.getElementById('generateBtn');
-        const loadingBox = document.getElementById('loadingBox');
-        
-        generateBtn.disabled = true;
-        loadingBox.classList.add('show');
-
-        try {
-            const formData = new FormData();
-            formData.append('action', 'generate_kg');
-            formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-            
-            selectedTables.forEach(table => {
-                formData.append('selected_tables', table);
-            });
-            
-            formData.append('selected_columns', JSON.stringify(selectedColumns));
-
-            console.log('📤 Sending request to generate KG...');
-
-            const response = await fetch(window.location.href, {
-                method: 'POST',
-                body: formData
-            });
-
-            const data = await response.json();
-            console.log('📥 Response:', data);
-
-            if (data.success) {
-                showAlert(data.message, 'success');
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1500);
+                icon.classList.add('collapsed');
             } else {
-                showAlert(data.error || 'Error generating knowledge graph', 'error');
+                container.classList.add('show');
+                icon.classList.remove('collapsed');
             }
-        } catch (error) {
-            console.error('❌ Error:', error);
-            showAlert('Failed to generate knowledge graph. Please try again.', 'error');
-        } finally {
-            generateBtn.disabled = false;
-            loadingBox.classList.remove('show');
         }
-    }
 
-    // Select/Deselect all tables
-    function selectAllTables() {
-        const checkboxes = document.querySelectorAll('input[name="selected_tables"]');
-        checkboxes.forEach(cb => {
-            if (!cb.checked) {
-                cb.checked = true;
-                loadTableColumns(cb.value, true);
-            }
-        });
-    }
+        // Expand/Collapse all tables in selection
+        function expandAllTables() {
+            document.querySelectorAll('.columns-container').forEach(container => {
+                container.classList.add('show');
+            });
+            document.querySelectorAll('.table-expand-icon').forEach(icon => {
+                icon.classList.remove('collapsed');
+            });
+        }
 
-    function deselectAllTables() {
-        const checkboxes = document.querySelectorAll('input[name="selected_tables"]');
-        checkboxes.forEach(cb => {
-            cb.checked = false;
-            const container = document.getElementById(`columns_${cb.value}`);
-            if (container) {
+        function collapseAllTables() {
+            document.querySelectorAll('.columns-container').forEach(container => {
                 container.classList.remove('show');
-                container.style.display = 'none';
-            }
-        });
-        // Don't clear selectedColumns - preserve selections
-    }
+            });
+            document.querySelectorAll('.table-expand-icon').forEach(icon => {
+                icon.classList.add('collapsed');
+            });
+        }
 
-    // Load columns for relationship dropdowns
-    async function loadColumnsForRelationship(selectElement, side) {
-        const tableName = selectElement.value;
-        if (!tableName) return Promise.resolve();
-
-        const relationshipItem = selectElement.closest('.relationship-item');
-        const columnSelect = relationshipItem.querySelector(`select[name="rel_${side}_column"]`);
-
-        try {
-            columnSelect.innerHTML = '<option value="">Loading...</option>';
+        // Toggle KG table expand/collapse
+        function toggleKGTable(tableName) {
+            const content = document.getElementById(`kg_content_${tableName}`);
+            const icon = document.getElementById(`kg_expand_${tableName}`);
             
-            const response = await fetch(`/get-table-columns/?table=${tableName}`);
-            const data = await response.json();
+            content.classList.toggle('collapsed');
+            icon.classList.toggle('collapsed');
+        }
 
-            if (data.columns) {
-                columnSelect.innerHTML = '<option value="">Select column...</option>';
-                data.columns.forEach(col => {
-                    const option = document.createElement('option');
-                    option.value = col.name;
-                    option.textContent = col.name;
-                    columnSelect.appendChild(option);
+        // Expand/Collapse all KG tables
+        function expandAllKGTables() {
+            document.querySelectorAll('.kg-table-content').forEach(content => {
+                content.classList.remove('collapsed');
+            });
+            document.querySelectorAll('.kg-expand-icon').forEach(icon => {
+                icon.classList.remove('collapsed');
+            });
+        }
+
+        function collapseAllKGTables() {
+            document.querySelectorAll('.kg-table-content').forEach(content => {
+                content.classList.add('collapsed');
+            });
+            document.querySelectorAll('.kg-expand-icon').forEach(icon => {
+                icon.classList.add('collapsed');
+            });
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Page loaded');
+            
+            // Load saved selections
+            try {
+                const savedColumns = {{ selected_columns|safe }};
+                if (savedColumns && typeof savedColumns === 'object') {
+                    selectedColumns = savedColumns;
+                    console.log('💾 Loaded selections:', selectedColumns);
+                }
+            } catch (e) {
+                selectedColumns = {};
+            }
+            
+            // Load columns for selected tables
+            const selectedTableCheckboxes = document.querySelectorAll('input[name="selected_tables"]:checked');
+            selectedTableCheckboxes.forEach(checkbox => {
+                loadTableColumns(checkbox.value, true);
+            });
+
+            loadExistingRelationshipColumns();
+        });
+
+        // ... REST OF YOUR EXISTING JAVASCRIPT ...
+        // (Keep all the existing functions: loadTableColumns, toggleTableColumns, 
+        //  toggleColumn, generateWithAI, selectAllTables, etc.)
+        
+        // Load existing relationship columns
+        function loadExistingRelationshipColumns() {
+            document.querySelectorAll('.relationship-item').forEach(item => {
+                const leftTableSelect = item.querySelector('select[name="rel_left_table"]');
+                const rightTableSelect = item.querySelector('select[name="rel_right_table"]');
+                const leftColumnSelect = item.querySelector('select[name="rel_left_column"]');
+                const rightColumnSelect = item.querySelector('select[name="rel_right_column"]');
+                
+                const savedLeftColumn = leftColumnSelect.getAttribute('data-value');
+                const savedRightColumn = rightColumnSelect.getAttribute('data-value');
+                
+                if (leftTableSelect.value) {
+                    loadColumnsForRelationship(leftTableSelect, 'left').then(() => {
+                        if (savedLeftColumn) {
+                            leftColumnSelect.value = savedLeftColumn;
+                        }
+                    });
+                }
+                
+                if (rightTableSelect.value) {
+                    loadColumnsForRelationship(rightTableSelect, 'right').then(() => {
+                        if (savedRightColumn) {
+                            rightColumnSelect.value = savedRightColumn;
+                        }
+                    });
+                }
+            });
+        }
+
+        async function loadTableColumns(tableName, isChecked) {
+            console.log(`📊 loadTableColumns: ${tableName}, checked: ${isChecked}`);
+            
+            if (isChecked) {
+                if (!loadedTables.has(tableName)) {
+                    try {
+                        const container = document.getElementById(`columns_${tableName}`);
+                        if (!container) return;
+                        
+                        container.innerHTML = '<small style="color: #667eea; padding: 10px;">⏳ Loading...</small>';
+                        container.classList.add('show');
+
+                        const response = await fetch(`/get-table-columns/?table=${tableName}`);
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        
+                        const data = await response.json();
+                        
+                        if (data.columns && data.columns.length > 0) {
+                            const savedCols = selectedColumns[tableName] || [];
+                            
+                            if (savedCols.length === 0 && !selectedColumns.hasOwnProperty(tableName)) {
+                                selectedColumns[tableName] = data.columns.map(col => col.name);
+                            }
+                            
+                            let html = '<div style="margin-top: 10px; padding: 0 10px;">';
+                            html += '<small style="color: #999; display: block; margin-bottom: 8px;">Select columns:</small>';
+                            
+                            data.columns.forEach(col => {
+                                const colId = `col_${tableName}_${col.name}`;
+                                const isSelected = selectedColumns[tableName] && selectedColumns[tableName].includes(col.name);
+                                
+                                html += `
+                                    <div class="column-item">
+                                        <label>
+                                            <input 
+                                                type="checkbox" 
+                                                id="${colId}"
+                                                value="${col.name}"
+                                                ${isSelected ? 'checked' : ''}
+                                                onchange="toggleColumn('${tableName}', '${col.name}', this.checked)"
+                                            >
+                                            <span>${col.name}</span>
+                                        </label>
+                                    </div>
+                                `;
+                            });
+                            html += '</div>';
+                            
+                            container.innerHTML = html;
+                            loadedTables.add(tableName);
+                            console.log(`✅ Loaded ${tableName}: ${selectedColumns[tableName].length} selected`);
+                        }
+                    } catch (error) {
+                        console.error(`❌ Error:`, error);
+                    }
+                } else {
+                    document.getElementById(`columns_${tableName}`).classList.add('show');
+                }
+            } else {
+                document.getElementById(`columns_${tableName}`).classList.remove('show');
+            }
+        }
+
+        function toggleTableColumns(tableName, isChecked) {
+            loadTableColumns(tableName, isChecked);
+        }
+
+        function toggleColumn(tableName, columnName, isChecked) {
+            if (!selectedColumns[tableName]) {
+                selectedColumns[tableName] = [];
+            }
+            
+            if (isChecked) {
+                if (!selectedColumns[tableName].includes(columnName)) {
+                    selectedColumns[tableName].push(columnName);
+                }
+            } else {
+                selectedColumns[tableName] = selectedColumns[tableName].filter(c => c !== columnName);
+            }
+        }
+
+        async function generateWithAI() {
+            const selectedTables = Array.from(document.querySelectorAll('input[name="selected_tables"]:checked'))
+                .map(cb => cb.value);
+            
+            if (selectedTables.length === 0) {
+                showAlert('Please select at least one table.', 'error');
+                return;
+            }
+
+            const tablesWithoutColumns = [];
+            for (const table of selectedTables) {
+                if (!selectedColumns[table] || selectedColumns[table].length === 0) {
+                    tablesWithoutColumns.push(table);
+                }
+            }
+
+            if (tablesWithoutColumns.length > 0) {
+                showAlert(`Please select columns for: ${tablesWithoutColumns.join(', ')}`, 'error');
+                return;
+            }
+
+            const generateBtn = document.getElementById('generateBtn');
+            const loadingBox = document.getElementById('loadingBox');
+            
+            generateBtn.disabled = true;
+            loadingBox.classList.add('show');
+
+            try {
+                const formData = new FormData();
+                formData.append('action', 'generate_kg');
+                formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+                
+                selectedTables.forEach(table => {
+                    formData.append('selected_tables', table);
                 });
                 
-                // Restore saved value if exists
-                const savedValue = columnSelect.getAttribute('data-value');
-                if (savedValue) {
-                    columnSelect.value = savedValue;
+                formData.append('selected_columns', JSON.stringify(selectedColumns));
+
+                const response = await fetch(window.location.href, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert(data.message, 'success');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    showAlert(data.error || 'Error generating knowledge graph', 'error');
                 }
-            } else {
-                columnSelect.innerHTML = '<option value="">No columns found</option>';
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('Failed to generate knowledge graph.', 'error');
+            } finally {
+                generateBtn.disabled = false;
+                loadingBox.classList.remove('show');
             }
-        } catch (error) {
-            console.error('Error loading columns:', error);
-            columnSelect.innerHTML = '<option value="">Error loading columns</option>';
         }
-        
-        return Promise.resolve();
-    }
 
-    function addRelationship() {
-        const list = document.getElementById('relationshipsList');
-        const item = document.createElement('div');
-        item.className = 'relationship-item';
-        
-        const selectedTables = Array.from(document.querySelectorAll('input[name="selected_tables"]:checked'))
-            .map(cb => cb.value);
-        
-        let tableOptions = '<option value="">Select table...</option>';
-        selectedTables.forEach(table => {
-            tableOptions += `<option value="${table}">${table}</option>`;
-        });
-        
-        item.innerHTML = `
-            <div class="relationship-grid">
-                <div class="relationship-side">
-                    <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Left Table</label>
-                    <select name="rel_left_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'left')">
-                        ${tableOptions}
-                    </select>
-                    
-                    <label style="font-size: 0.85em; color: #666; margin: 10px 0 5px 0; display: block;">Column</label>
-                    <select name="rel_left_column" class="rel-select rel-column-select">
-                        <option value="">Select column...</option>
-                    </select>
-                </div>
-
-                <div class="relationship-center">
-                    <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Relationship</label>
-                    <select name="rel_type" class="rel-type-select">
-                        <option value="one-to-one">1:1 (One to One)</option>
-                        <option value="one-to-many" selected>1:N (One to Many)</option>
-                        <option value="many-to-one">N:1 (Many to One)</option>
-                        <option value="many-to-many">N:N (Many to Many)</option>
-                    </select>
-                    <div class="rel-arrow">↔️</div>
-                </div>
-
-                <div class="relationship-side">
-                    <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Right Table</label>
-                    <select name="rel_right_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'right')">
-                        ${tableOptions}
-                    </select>
-                    
-                    <label style="font-size: 0.85em; color: #666; margin: 10px 0 5px 0; display: block;">Column</label>
-                    <select name="rel_right_column" class="rel-select rel-column-select">
-                        <option value="">Select column...</option>
-                    </select>
-                </div>
-            </div>
-
-            <button type="button" class="remove-btn" onclick="removeItem(this)" style="margin-top: 15px;">🗑️ Remove Relationship</button>
-        `;
-        
-        list.appendChild(item);
-    }
-
-    // Upload Knowledge Graph CSV
-    async function uploadKG(input) {
-        const file = input.files[0];
-        if (!file) return;
-        
-        if (!file.name.endsWith('.csv')) {
-            alert('Please upload a CSV file');
-            return;
+        function selectAllTables() {
+            const checkboxes = document.querySelectorAll('input[name="selected_tables"]');
+            checkboxes.forEach(cb => {
+                if (!cb.checked) {
+                    cb.checked = true;
+                    loadTableColumns(cb.value, true);
+                }
+            });
         }
-        
-        const formData = new FormData();
-        formData.append('csv_file', file);
-        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-        
-        try {
-            showAlert('Uploading knowledge graph...', 'success');
+
+        function deselectAllTables() {
+            const checkboxes = document.querySelectorAll('input[name="selected_tables"]');
+            checkboxes.forEach(cb => {
+                cb.checked = false;
+                const container = document.getElementById(`columns_${cb.value}`);
+                if (container) container.classList.remove('show');
+            });
+        }
+
+        async function loadColumnsForRelationship(selectElement, side) {
+            const tableName = selectElement.value;
+            if (!tableName) return Promise.resolve();
+
+            const relationshipItem = selectElement.closest('.relationship-item');
+            const columnSelect = relationshipItem.querySelector(`select[name="rel_${side}_column"]`);
+
+            try {
+                columnSelect.innerHTML = '<option value="">Loading...</option>';
+                
+                const response = await fetch(`/get-table-columns/?table=${tableName}`);
+                const data = await response.json();
+
+                if (data.columns) {
+                    columnSelect.innerHTML = '<option value="">Select column...</option>';
+                    data.columns.forEach(col => {
+                        const option = document.createElement('option');
+                        option.value = col.name;
+                        option.textContent = col.name;
+                        columnSelect.appendChild(option);
+                    });
+                    
+                    const savedValue = columnSelect.getAttribute('data-value');
+                    if (savedValue) {
+                        columnSelect.value = savedValue;
+                    }
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
             
-            const response = await fetch(`/upload-module-kg-csv/{{ module.id }}/`, {
-                method: 'POST',
-                body: formData
+            return Promise.resolve();
+        }
+
+        function addRelationship() {
+            const list = document.getElementById('relationshipsList');
+            const item = document.createElement('div');
+            item.className = 'relationship-item';
+            
+            const selectedTables = Array.from(document.querySelectorAll('input[name="selected_tables"]:checked'))
+                .map(cb => cb.value);
+            
+            let tableOptions = '<option value="">Select table...</option>';
+            selectedTables.forEach(table => {
+                tableOptions += `<option value="${table}">${table}</option>`;
             });
             
-            if (response.ok) {
-                showAlert('Knowledge graph uploaded successfully! Reloading...', 'success');
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1500);
-            } else {
-                showAlert('Error uploading file. Please try again.', 'error');
-            }
-        } catch (error) {
-            console.error('Upload error:', error);
-            showAlert('Failed to upload knowledge graph', 'error');
+            item.innerHTML = `
+                <div class="relationship-grid">
+                    <div class="relationship-side">
+                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Left Table</label>
+                        <select name="rel_left_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'left')">
+                            ${tableOptions}
+                        </select>
+                        
+                        <label style="font-size: 0.85em; color: #666; margin: 10px 0 5px 0; display: block;">Column</label>
+                        <select name="rel_left_column" class="rel-select rel-column-select">
+                            <option value="">Select column...</option>
+                        </select>
+                    </div>
+
+                    <div class="relationship-center">
+                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Relationship</label>
+                        <select name="rel_type" class="rel-type-select">
+                            <option value="one-to-one">1:1 (One to One)</option>
+                            <option value="one-to-many" selected>1:N (One to Many)</option>
+                            <option value="many-to-one">N:1 (Many to One)</option>
+                            <option value="many-to-many">N:N (Many to Many)</option>
+                        </select>
+                        <div class="rel-arrow">↔️</div>
+                    </div>
+
+                    <div class="relationship-side">
+                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Right Table</label>
+                        <select name="rel_right_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'right')">
+                            ${tableOptions}
+                        </select>
+                        
+                        <label style="font-size: 0.85em; color: #666; margin: 10px 0 5px 0; display: block;">Column</label>
+                        <select name="rel_right_column" class="rel-select rel-column-select">
+                            <option value="">Select column...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="button" class="remove-btn" onclick="removeItem(this)" style="margin-top: 15px;">🗑️ Remove Relationship</button>
+            `;
+            
+            list.appendChild(item);
         }
-        
-        input.value = '';
-    }
 
-    // Show alert message
-    function showAlert(message, type) {
-        const alertBox = document.getElementById('alertBox');
-        alertBox.textContent = message;
-        alertBox.className = `alert alert-${type} show`;
-        
-        setTimeout(() => {
-            alertBox.classList.remove('show');
-        }, 5000);
-    }
+        async function uploadKG(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            if (!file.name.endsWith('.csv')) {
+                alert('Please upload a CSV file');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('csv_file', file);
+            formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+            
+            try {
+                showAlert('Uploading...', 'success');
+                
+                const response = await fetch(`/upload-module-kg-csv/{{ module.id }}/`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    showAlert('Uploaded successfully!', 'success');
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    showAlert('Error uploading file.', 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('Failed to upload', 'error');
+            }
+            
+            input.value = '';
+        }
 
-    // Dynamic list functions
-    function addRCA() {
-        const list = document.getElementById('rcaList');
-        const item = document.createElement('div');
-        item.className = 'dynamic-item';
-        item.innerHTML = `
-            <input type="text" name="rca_title" placeholder="RCA Title">
-            <textarea name="rca_content" placeholder="RCA Content" rows="3"></textarea>
-            <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
-        `;
-        list.appendChild(item);
-    }
+        function showAlert(message, type) {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.textContent = message;
+            alertBox.className = `alert alert-${type} show`;
+            
+            setTimeout(() => {
+                alertBox.classList.remove('show');
+            }, 5000);
+        }
 
-    function addPOS() {
-        const list = document.getElementById('posList');
-        const item = document.createElement('div');
-        item.className = 'dynamic-item';
-        item.innerHTML = `
-            <input type="text" name="pos_name" placeholder="Entity Name">
-            <input type="text" name="pos_reference" placeholder="Reference/Synonym">
-            <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
-        `;
-        list.appendChild(item);
-    }
+        function addRCA() {
+            const list = document.getElementById('rcaList');
+            const item = document.createElement('div');
+            item.className = 'dynamic-item';
+            item.innerHTML = `
+                <input type="text" name="rca_title" placeholder="RCA Title">
+                <textarea name="rca_content" placeholder="RCA Content" rows="3"></textarea>
+                <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
+            `;
+            list.appendChild(item);
+        }
 
-    function addMetric() {
-        const list = document.getElementById('metricsList');
-        const item = document.createElement('div');
-        item.className = 'dynamic-item';
-        item.innerHTML = `
-            <input type="text" name="metric_name" placeholder="Metric Name">
-            <textarea name="metric_desc" placeholder="Metric Description" rows="2"></textarea>
-            <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
-        `;
-        list.appendChild(item);
-    }
+        function addPOS() {
+            const list = document.getElementById('posList');
+            const item = document.createElement('div');
+            item.className = 'dynamic-item';
+            item.innerHTML = `
+                <input type="text" name="pos_name" placeholder="Entity Name">
+                <input type="text" name="pos_reference" placeholder="Reference/Synonym">
+                <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
+            `;
+            list.appendChild(item);
+        }
 
-    function removeItem(button) {
-        button.parentElement.remove();
-    }
+        function addMetric() {
+            const list = document.getElementById('metricsList');
+            const item = document.createElement('div');
+            item.className = 'dynamic-item';
+            item.innerHTML = `
+                <input type="text" name="metric_name" placeholder="Metric Name">
+                <textarea name="metric_desc" placeholder="Metric Description" rows="2"></textarea>
+                <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
+            `;
+            list.appendChild(item);
+        }
 
-    // Before form submission, update selected columns
-    document.getElementById('mainForm').addEventListener('submit', function(e) {
-        console.log('📝 Form submitting with selected columns:', selectedColumns);
-        document.getElementById('selectedColumnsInput').value = JSON.stringify(selectedColumns);
-    });
-</script>
+        function removeItem(button) {
+            button.parentElement.remove();
+        }
 
+        document.getElementById('mainForm').addEventListener('submit', function(e) {
+            document.getElementById('selectedColumnsInput').value = JSON.stringify(selectedColumns);
+        });
+    </script>
 </body>
 </html>
