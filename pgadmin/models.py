@@ -4,11 +4,10 @@ from django.core.validators import MinLengthValidator
 
 
 class Module(models.Model):
-    """Main module for organizing database schemas and knowledge graphs"""
-    id = models.BigAutoField(primary_key=True)
-    user_name = models.CharField(max_length=255, db_index=True, validators=[MinLengthValidator(1)])
-    name = models.CharField(max_length=255, validators=[MinLengthValidator(1)])
+    user_name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255)
     tables = models.JSONField(default=list, blank=True)
+    selected_columns = models.JSONField(default=dict, blank=True)  # ← ADD THIS LINE
     knowledge_graph_data = models.JSONField(default=dict, blank=True)
     relationships = models.JSONField(default=list, blank=True)  # ← NEW FIELD
     rca_list = models.JSONField(default=list, blank=True)

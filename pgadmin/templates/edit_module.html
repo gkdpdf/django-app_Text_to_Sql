@@ -701,433 +701,479 @@
         </form>
     </div>
 
-    <script>
-        let selectedColumns = {};
-        let loadedTables = new Set();
+        
+<script>
+    let selectedColumns = {};
+    let loadedTables = new Set();
 
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            // Load columns for already selected tables
-            const selectedTableCheckboxes = document.querySelectorAll('input[name="selected_tables"]:checked');
-            selectedTableCheckboxes.forEach(checkbox => {
-                loadTableColumns(checkbox.value, true);
-            });
-
-            // Load columns for existing relationships
-            loadExistingRelationshipColumns();
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('🚀 Page loaded, initializing...');
+        
+        // Pre-load saved column selections if they exist
+        try {
+            const savedColumns = {{ selected_columns|safe }};
+            if (savedColumns && typeof savedColumns === 'object') {
+                selectedColumns = savedColumns;
+                console.log('💾 Loaded saved selections:', selectedColumns);
+            }
+        } catch (e) {
+            console.warn('No saved columns or error loading:', e);
+            selectedColumns = {};
+        }
+        
+        // Load columns for already selected tables
+        const selectedTableCheckboxes = document.querySelectorAll('input[name="selected_tables"]:checked');
+        console.log(`Found ${selectedTableCheckboxes.length} pre-selected tables`);
+        
+        selectedTableCheckboxes.forEach(checkbox => {
+            const tableName = checkbox.value;
+            console.log(`Loading columns for pre-selected table: ${tableName}`);
+            loadTableColumns(tableName, true);
         });
 
         // Load columns for existing relationships
-        function loadExistingRelationshipColumns() {
-            document.querySelectorAll('.relationship-item').forEach(item => {
-                const leftTableSelect = item.querySelector('select[name="rel_left_table"]');
-                const rightTableSelect = item.querySelector('select[name="rel_right_table"]');
-                const leftColumnSelect = item.querySelector('select[name="rel_left_column"]');
-                const rightColumnSelect = item.querySelector('select[name="rel_right_column"]');
-                
-                const savedLeftColumn = leftColumnSelect.getAttribute('data-value');
-                const savedRightColumn = rightColumnSelect.getAttribute('data-value');
-                
-                if (leftTableSelect.value) {
-                    loadColumnsForRelationship(leftTableSelect, 'left').then(() => {
-                        if (savedLeftColumn) {
-                            leftColumnSelect.value = savedLeftColumn;
-                        }
-                    });
-                }
-                
-                if (rightTableSelect.value) {
-                    loadColumnsForRelationship(rightTableSelect, 'right').then(() => {
-                        if (savedRightColumn) {
-                            rightColumnSelect.value = savedRightColumn;
-                        }
-                    });
-                }
-            });
-        }
+        loadExistingRelationshipColumns();
+    });
 
-        // Load table columns when a table is checked
-        // Load table columns when a table is checked
-        async function loadTableColumns(tableName, isChecked) {
-            console.log(`Loading columns for ${tableName}, checked: ${isChecked}`);
+    // Load columns for existing relationships
+    function loadExistingRelationshipColumns() {
+        document.querySelectorAll('.relationship-item').forEach(item => {
+            const leftTableSelect = item.querySelector('select[name="rel_left_table"]');
+            const rightTableSelect = item.querySelector('select[name="rel_right_table"]');
+            const leftColumnSelect = item.querySelector('select[name="rel_left_column"]');
+            const rightColumnSelect = item.querySelector('select[name="rel_right_column"]');
             
-            if (isChecked) {
-                if (!loadedTables.has(tableName)) {
-                    try {
-                        const container = document.getElementById(`columns_${tableName}`);
-                        if (!container) {
-                            console.error(`Container not found for ${tableName}`);
-                            return;
-                        }
-                        
-                        container.innerHTML = '<small style="color: #667eea;">⏳ Loading columns...</small>';
-                        container.classList.add('show');
-
-                        const response = await fetch(`/get-table-columns/?table=${tableName}`);
-                        
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
-                        }
-                        
-                        const data = await response.json();
-                        console.log(`Received ${data.columns ? data.columns.length : 0} columns for ${tableName}`);
-                        
-                        if (data.columns && data.columns.length > 0) {
-                            selectedColumns[tableName] = [];
-                            
-                            let html = '<div style="margin-top: 10px;">';
-                            html += '<small style="color: #999; display: block; margin-bottom: 8px;">Select columns:</small>';
-                            
-                            data.columns.forEach(col => {
-                                const colId = `col_${tableName}_${col.name}`;
-                                html += `
-                                    <div class="column-item">
-                                        <label>
-                                            <input 
-                                                type="checkbox" 
-                                                id="${colId}"
-                                                value="${col.name}"
-                                                checked
-                                                onchange="toggleColumn('${tableName}', '${col.name}', this.checked)"
-                                            >
-                                            <span>${col.name}</span>
-                                        </label>
-                                    </div>
-                                `;
-                                selectedColumns[tableName].push(col.name);
-                            });
-                            html += '</div>';
-                            
-                            container.innerHTML = html;
-                            loadedTables.add(tableName);
-                            console.log(`✅ Successfully loaded ${data.columns.length} columns for ${tableName}`);
-                        } else {
-                            container.innerHTML = '<small style="color: #f5576c;">No columns found</small>';
-                            console.warn(`No columns returned for ${tableName}`);
-                        }
-                    } catch (error) {
-                        console.error('Error loading columns:', error);
-                        const container = document.getElementById(`columns_${tableName}`);
-                        if (container) {
-                            container.innerHTML = '<small style="color: #f5576c;">❌ Error loading columns. Check console.</small>';
-                        }
+            const savedLeftColumn = leftColumnSelect.getAttribute('data-value');
+            const savedRightColumn = rightColumnSelect.getAttribute('data-value');
+            
+            if (leftTableSelect.value) {
+                loadColumnsForRelationship(leftTableSelect, 'left').then(() => {
+                    if (savedLeftColumn) {
+                        leftColumnSelect.value = savedLeftColumn;
                     }
-                } else {
-                    // Table already loaded, just show the container
+                });
+            }
+            
+            if (rightTableSelect.value) {
+                loadColumnsForRelationship(rightTableSelect, 'right').then(() => {
+                    if (savedRightColumn) {
+                        rightColumnSelect.value = savedRightColumn;
+                    }
+                });
+            }
+        });
+    }
+
+    // Load table columns when a table is checked
+    async function loadTableColumns(tableName, isChecked) {
+        console.log(`📊 loadTableColumns called: ${tableName}, checked: ${isChecked}`);
+        
+        if (isChecked) {
+            // Only load if not already loaded
+            if (!loadedTables.has(tableName)) {
+                try {
+                    const container = document.getElementById(`columns_${tableName}`);
+                    if (!container) {
+                        console.error(`❌ Container not found for ${tableName}`);
+                        return;
+                    }
+                    
+                    // Show loading state
+                    container.innerHTML = '<small style="color: #667eea; padding: 10px;">⏳ Loading columns...</small>';
+                    container.classList.add('show');
+                    container.style.display = 'block';
+
+                    console.log(`🌐 Fetching columns for ${tableName}...`);
+                    const response = await fetch(`/get-table-columns/?table=${tableName}`);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log(`✅ Received data for ${tableName}:`, data);
+                    
+                    if (data.columns && data.columns.length > 0) {
+                        // Check if we have saved selections for this table
+                        const savedCols = selectedColumns[tableName] || [];
+                        if (savedCols.length === 0 && !selectedColumns.hasOwnProperty(tableName)) {
+                        selectedColumns[tableName] = data.columns.map(col => col.name);
+                        console.log(`No saved selections, selecting all ${data.columns.length} columns`);
+                        }
+                        // If no saved selections, select all by default
+                         else {
+                            console.log(`Using saved selections: ${savedCols.length} columns`);
+                        }
+                        
+                        let html = '<div style="margin-top: 10px; padding: 0 10px;">';
+                        html += '<small style="color: #999; display: block; margin-bottom: 8px;">Select columns:</small>';
+                        
+                        data.columns.forEach(col => {
+                            const colId = `col_${tableName}_${col.name}`;
+                            const isSelected = selectedColumns[tableName] && selectedColumns[tableName].includes(col.name);
+                            
+                            html += `
+                                <div class="column-item">
+                                    <label>
+                                        <input 
+                                            type="checkbox" 
+                                            id="${colId}"
+                                            value="${col.name}"
+                                            ${isSelected ? 'checked' : ''}
+                                            onchange="toggleColumn('${tableName}', '${col.name}', this.checked)"
+                                        >
+                                        <span>${col.name}</span>
+                                    </label>
+                                </div>
+                            `;
+                        });
+                        html += '</div>';
+                        
+                        container.innerHTML = html;
+                        loadedTables.add(tableName);
+                        console.log(`✅ Successfully rendered ${data.columns.length} columns for ${tableName}`);
+                        console.log(`   Selected: ${selectedColumns[tableName].length} columns`);
+                    } else {
+                        container.innerHTML = '<small style="color: #f5576c; padding: 10px;">No columns found</small>';
+                        console.warn(`⚠️ No columns returned for ${tableName}`);
+                    }
+                } catch (error) {
+                    console.error(`❌ Error loading columns for ${tableName}:`, error);
                     const container = document.getElementById(`columns_${tableName}`);
                     if (container) {
-                        container.classList.add('show');
-                        console.log(`Table ${tableName} already loaded, showing container`);
+                        container.innerHTML = `<small style="color: #f5576c; padding: 10px;">❌ Error: ${error.message}</small>`;
                     }
                 }
             } else {
-                // Unchecking the table
+                // Already loaded, just show
                 const container = document.getElementById(`columns_${tableName}`);
                 if (container) {
-                    container.classList.remove('show');
+                    container.classList.add('show');
+                    container.style.display = 'block';
+                    console.log(`✓ Table ${tableName} already loaded, showing container`);
                 }
-                if (selectedColumns[tableName]) {
-                    selectedColumns[tableName] = [];
-                }
-                console.log(`Unchecked ${tableName}, hiding columns`);
+            }
+        } else {
+            // Unchecking the table - hide but don't delete
+            const container = document.getElementById(`columns_${tableName}`);
+            if (container) {
+                container.classList.remove('show');
+                container.style.display = 'none';
+            }
+            console.log(`Hiding columns for ${tableName}`);
+        }
+    }
+
+    // Toggle table columns visibility
+    function toggleTableColumns(tableName, isChecked) {
+        console.log(`🔄 Toggle table: ${tableName}, checked: ${isChecked}`);
+        loadTableColumns(tableName, isChecked);
+    }
+
+    // Toggle individual column selection
+    function toggleColumn(tableName, columnName, isChecked) {
+        if (!selectedColumns[tableName]) {
+            selectedColumns[tableName] = [];
+        }
+        
+        if (isChecked) {
+            if (!selectedColumns[tableName].includes(columnName)) {
+                selectedColumns[tableName].push(columnName);
+            }
+        } else {
+            selectedColumns[tableName] = selectedColumns[tableName].filter(c => c !== columnName);
+        }
+        console.log(`Column ${columnName} in ${tableName} is now ${isChecked ? 'selected' : 'deselected'}`);
+        console.log(`Total selected in ${tableName}: ${selectedColumns[tableName].length}`);
+    }
+
+    // Generate with AI
+    async function generateWithAI() {
+        const selectedTables = Array.from(document.querySelectorAll('input[name="selected_tables"]:checked'))
+            .map(cb => cb.value);
+        
+        console.log('🤖 Generate with AI clicked');
+        console.log('Selected tables:', selectedTables);
+        console.log('Selected columns:', selectedColumns);
+        
+        if (selectedTables.length === 0) {
+            showAlert('Please select at least one table.', 'error');
+            return;
+        }
+
+        const tablesWithoutColumns = [];
+        for (const table of selectedTables) {
+            if (!selectedColumns[table] || selectedColumns[table].length === 0) {
+                tablesWithoutColumns.push(table);
             }
         }
 
-        // Toggle table columns visibility
-        function toggleTableColumns(tableName, isChecked) {
-            loadTableColumns(tableName, isChecked);
+        if (tablesWithoutColumns.length > 0) {
+            showAlert(`Please select columns for: ${tablesWithoutColumns.join(', ')}`, 'error');
+            return;
         }
 
-        // Toggle individual column selection
-        function toggleColumn(tableName, columnName, isChecked) {
-            if (!selectedColumns[tableName]) {
-                selectedColumns[tableName] = [];
-            }
-            
-            if (isChecked) {
-                if (!selectedColumns[tableName].includes(columnName)) {
-                    selectedColumns[tableName].push(columnName);
-                }
-            } else {
-                selectedColumns[tableName] = selectedColumns[tableName].filter(c => c !== columnName);
-            }
-            console.log(`Column ${columnName} in ${tableName} is now ${isChecked ? 'selected' : 'deselected'}`);
-        }
+        const generateBtn = document.getElementById('generateBtn');
+        const loadingBox = document.getElementById('loadingBox');
+        
+        generateBtn.disabled = true;
+        loadingBox.classList.add('show');
 
-        // Generate with AI
-        async function generateWithAI() {
-            const selectedTables = Array.from(document.querySelectorAll('input[name="selected_tables"]:checked'))
-                .map(cb => cb.value);
-            
-            if (selectedTables.length === 0) {
-                showAlert('Please select at least one table.', 'error');
-                return;
-            }
-
-            const tablesWithoutColumns = [];
-            for (const table of selectedTables) {
-                if (!selectedColumns[table] || selectedColumns[table].length === 0) {
-                    tablesWithoutColumns.push(table);
-                }
-            }
-
-            if (tablesWithoutColumns.length > 0) {
-                showAlert(`Please select columns for: ${tablesWithoutColumns.join(', ')}`, 'error');
-                return;
-            }
-
-            const generateBtn = document.getElementById('generateBtn');
-            const loadingBox = document.getElementById('loadingBox');
-            
-            generateBtn.disabled = true;
-            loadingBox.classList.add('show');
-
-            try {
-                const formData = new FormData();
-                formData.append('action', 'generate_kg');
-                formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-                
-                selectedTables.forEach(table => {
-                    formData.append('selected_tables', table);
-                });
-                
-                formData.append('selected_columns', JSON.stringify(selectedColumns));
-
-                const response = await fetch(window.location.href, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    showAlert(data.message, 'success');
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1500);
-                } else {
-                    showAlert(data.error || 'Error generating knowledge graph', 'error');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showAlert('Failed to generate knowledge graph. Please try again.', 'error');
-            } finally {
-                generateBtn.disabled = false;
-                loadingBox.classList.remove('show');
-            }
-        }
-
-        // Select/Deselect all tables
-        function selectAllTables() {
-            const checkboxes = document.querySelectorAll('input[name="selected_tables"]');
-            checkboxes.forEach(cb => {
-                if (!cb.checked) {
-                    cb.checked = true;
-                    loadTableColumns(cb.value, true);
-                }
-            });
-        }
-
-        function deselectAllTables() {
-            const checkboxes = document.querySelectorAll('input[name="selected_tables"]');
-            checkboxes.forEach(cb => {
-                cb.checked = false;
-                const container = document.getElementById(`columns_${cb.value}`);
-                if (container) {
-                    container.classList.remove('show');
-                }
-            });
-            selectedColumns = {};
-        }
-
-        // Load columns for relationship dropdowns
-        async function loadColumnsForRelationship(selectElement, side) {
-            const tableName = selectElement.value;
-            if (!tableName) return;
-
-            const relationshipItem = selectElement.closest('.relationship-item');
-            const columnSelect = relationshipItem.querySelector(`select[name="rel_${side}_column"]`);
-
-            try {
-                columnSelect.innerHTML = '<option value="">Loading...</option>';
-                
-                const response = await fetch(`/get-table-columns/?table=${tableName}`);
-                const data = await response.json();
-
-                if (data.columns) {
-                    columnSelect.innerHTML = '<option value="">Select column...</option>';
-                    data.columns.forEach(col => {
-                        const option = document.createElement('option');
-                        option.value = col.name;
-                        option.textContent = col.name;
-                        columnSelect.appendChild(option);
-                    });
-                    
-                    // Restore saved value if exists
-                    const savedValue = columnSelect.getAttribute('data-value');
-                    if (savedValue) {
-                        columnSelect.value = savedValue;
-                    }
-                } else {
-                    columnSelect.innerHTML = '<option value="">No columns found</option>';
-                }
-            } catch (error) {
-                console.error('Error loading columns:', error);
-                columnSelect.innerHTML = '<option value="">Error loading columns</option>';
-            }
-        }
-
-        function addRelationship() {
-            const list = document.getElementById('relationshipsList');
-            const item = document.createElement('div');
-            item.className = 'relationship-item';
-            
-            const selectedTables = Array.from(document.querySelectorAll('input[name="selected_tables"]:checked'))
-                .map(cb => cb.value);
-            
-            let tableOptions = '<option value="">Select table...</option>';
-            selectedTables.forEach(table => {
-                tableOptions += `<option value="${table}">${table}</option>`;
-            });
-            
-            item.innerHTML = `
-                <div class="relationship-grid">
-                    <div class="relationship-side">
-                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Left Table</label>
-                        <select name="rel_left_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'left')">
-                            ${tableOptions}
-                        </select>
-                        
-                        <label style="font-size: 0.85em; color: #666; margin: 10px 0 5px 0; display: block;">Column</label>
-                        <select name="rel_left_column" class="rel-select rel-column-select">
-                            <option value="">Select column...</option>
-                        </select>
-                    </div>
-
-                    <div class="relationship-center">
-                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Relationship</label>
-                        <select name="rel_type" class="rel-type-select">
-                            <option value="one-to-one">1:1 (One to One)</option>
-                            <option value="one-to-many" selected>1:N (One to Many)</option>
-                            <option value="many-to-one">N:1 (Many to One)</option>
-                            <option value="many-to-many">N:N (Many to Many)</option>
-                        </select>
-                        <div class="rel-arrow">↔️</div>
-                    </div>
-
-                    <div class="relationship-side">
-                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Right Table</label>
-                        <select name="rel_right_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'right')">
-                            ${tableOptions}
-                        </select>
-                        
-                        <label style="font-size: 0.85em; color: #666; margin: 10px 0 5px 0; display: block;">Column</label>
-                        <select name="rel_right_column" class="rel-select rel-column-select">
-                            <option value="">Select column...</option>
-                        </select>
-                    </div>
-                </div>
-
-                <button type="button" class="remove-btn" onclick="removeItem(this)" style="margin-top: 15px;">🗑️ Remove Relationship</button>
-            `;
-            
-            list.appendChild(item);
-        }
-
-        // Upload Knowledge Graph CSV
-        async function uploadKG(input) {
-            const file = input.files[0];
-            if (!file) return;
-            
-            if (!file.name.endsWith('.csv')) {
-                alert('Please upload a CSV file');
-                return;
-            }
-            
+        try {
             const formData = new FormData();
-            formData.append('csv_file', file);
+            formData.append('action', 'generate_kg');
             formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
             
-            try {
-                showAlert('Uploading knowledge graph...', 'success');
-                
-                const response = await fetch(`/upload-module-kg-csv/{{ module.id }}/`, {
-                    method: 'POST',
-                    body: formData
+            selectedTables.forEach(table => {
+                formData.append('selected_tables', table);
+            });
+            
+            formData.append('selected_columns', JSON.stringify(selectedColumns));
+
+            console.log('📤 Sending request to generate KG...');
+
+            const response = await fetch(window.location.href, {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            console.log('📥 Response:', data);
+
+            if (data.success) {
+                showAlert(data.message, 'success');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                showAlert(data.error || 'Error generating knowledge graph', 'error');
+            }
+        } catch (error) {
+            console.error('❌ Error:', error);
+            showAlert('Failed to generate knowledge graph. Please try again.', 'error');
+        } finally {
+            generateBtn.disabled = false;
+            loadingBox.classList.remove('show');
+        }
+    }
+
+    // Select/Deselect all tables
+    function selectAllTables() {
+        const checkboxes = document.querySelectorAll('input[name="selected_tables"]');
+        checkboxes.forEach(cb => {
+            if (!cb.checked) {
+                cb.checked = true;
+                loadTableColumns(cb.value, true);
+            }
+        });
+    }
+
+    function deselectAllTables() {
+        const checkboxes = document.querySelectorAll('input[name="selected_tables"]');
+        checkboxes.forEach(cb => {
+            cb.checked = false;
+            const container = document.getElementById(`columns_${cb.value}`);
+            if (container) {
+                container.classList.remove('show');
+                container.style.display = 'none';
+            }
+        });
+        // Don't clear selectedColumns - preserve selections
+    }
+
+    // Load columns for relationship dropdowns
+    async function loadColumnsForRelationship(selectElement, side) {
+        const tableName = selectElement.value;
+        if (!tableName) return Promise.resolve();
+
+        const relationshipItem = selectElement.closest('.relationship-item');
+        const columnSelect = relationshipItem.querySelector(`select[name="rel_${side}_column"]`);
+
+        try {
+            columnSelect.innerHTML = '<option value="">Loading...</option>';
+            
+            const response = await fetch(`/get-table-columns/?table=${tableName}`);
+            const data = await response.json();
+
+            if (data.columns) {
+                columnSelect.innerHTML = '<option value="">Select column...</option>';
+                data.columns.forEach(col => {
+                    const option = document.createElement('option');
+                    option.value = col.name;
+                    option.textContent = col.name;
+                    columnSelect.appendChild(option);
                 });
                 
-                if (response.ok) {
-                    showAlert('Knowledge graph uploaded successfully! Reloading...', 'success');
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1500);
-                } else {
-                    showAlert('Error uploading file. Please try again.', 'error');
+                // Restore saved value if exists
+                const savedValue = columnSelect.getAttribute('data-value');
+                if (savedValue) {
+                    columnSelect.value = savedValue;
                 }
-            } catch (error) {
-                console.error('Upload error:', error);
-                showAlert('Failed to upload knowledge graph', 'error');
+            } else {
+                columnSelect.innerHTML = '<option value="">No columns found</option>';
             }
-            
-            input.value = '';
+        } catch (error) {
+            console.error('Error loading columns:', error);
+            columnSelect.innerHTML = '<option value="">Error loading columns</option>';
         }
+        
+        return Promise.resolve();
+    }
 
-        // Show alert message
-        function showAlert(message, type) {
-            const alertBox = document.getElementById('alertBox');
-            alertBox.textContent = message;
-            alertBox.className = `alert alert-${type} show`;
-            
-            setTimeout(() => {
-                alertBox.classList.remove('show');
-            }, 5000);
-        }
-
-        // Dynamic list functions
-        function addRCA() {
-            const list = document.getElementById('rcaList');
-            const item = document.createElement('div');
-            item.className = 'dynamic-item';
-            item.innerHTML = `
-                <input type="text" name="rca_title" placeholder="RCA Title">
-                <textarea name="rca_content" placeholder="RCA Content" rows="3"></textarea>
-                <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
-            `;
-            list.appendChild(item);
-        }
-
-        function addPOS() {
-            const list = document.getElementById('posList');
-            const item = document.createElement('div');
-            item.className = 'dynamic-item';
-            item.innerHTML = `
-                <input type="text" name="pos_name" placeholder="Entity Name">
-                <input type="text" name="pos_reference" placeholder="Reference/Synonym">
-                <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
-            `;
-            list.appendChild(item);
-        }
-
-        function addMetric() {
-            const list = document.getElementById('metricsList');
-            const item = document.createElement('div');
-            item.className = 'dynamic-item';
-            item.innerHTML = `
-                <input type="text" name="metric_name" placeholder="Metric Name">
-                <textarea name="metric_desc" placeholder="Metric Description" rows="2"></textarea>
-                <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
-            `;
-            list.appendChild(item);
-        }
-
-        function removeItem(button) {
-            button.parentElement.remove();
-        }
-
-        // Before form submission, update selected columns
-        document.getElementById('mainForm').addEventListener('submit', function(e) {
-            document.getElementById('selectedColumnsInput').value = JSON.stringify(selectedColumns);
+    function addRelationship() {
+        const list = document.getElementById('relationshipsList');
+        const item = document.createElement('div');
+        item.className = 'relationship-item';
+        
+        const selectedTables = Array.from(document.querySelectorAll('input[name="selected_tables"]:checked'))
+            .map(cb => cb.value);
+        
+        let tableOptions = '<option value="">Select table...</option>';
+        selectedTables.forEach(table => {
+            tableOptions += `<option value="${table}">${table}</option>`;
         });
-    </script>
+        
+        item.innerHTML = `
+            <div class="relationship-grid">
+                <div class="relationship-side">
+                    <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Left Table</label>
+                    <select name="rel_left_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'left')">
+                        ${tableOptions}
+                    </select>
+                    
+                    <label style="font-size: 0.85em; color: #666; margin: 10px 0 5px 0; display: block;">Column</label>
+                    <select name="rel_left_column" class="rel-select rel-column-select">
+                        <option value="">Select column...</option>
+                    </select>
+                </div>
+
+                <div class="relationship-center">
+                    <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Relationship</label>
+                    <select name="rel_type" class="rel-type-select">
+                        <option value="one-to-one">1:1 (One to One)</option>
+                        <option value="one-to-many" selected>1:N (One to Many)</option>
+                        <option value="many-to-one">N:1 (Many to One)</option>
+                        <option value="many-to-many">N:N (Many to Many)</option>
+                    </select>
+                    <div class="rel-arrow">↔️</div>
+                </div>
+
+                <div class="relationship-side">
+                    <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Right Table</label>
+                    <select name="rel_right_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'right')">
+                        ${tableOptions}
+                    </select>
+                    
+                    <label style="font-size: 0.85em; color: #666; margin: 10px 0 5px 0; display: block;">Column</label>
+                    <select name="rel_right_column" class="rel-select rel-column-select">
+                        <option value="">Select column...</option>
+                    </select>
+                </div>
+            </div>
+
+            <button type="button" class="remove-btn" onclick="removeItem(this)" style="margin-top: 15px;">🗑️ Remove Relationship</button>
+        `;
+        
+        list.appendChild(item);
+    }
+
+    // Upload Knowledge Graph CSV
+    async function uploadKG(input) {
+        const file = input.files[0];
+        if (!file) return;
+        
+        if (!file.name.endsWith('.csv')) {
+            alert('Please upload a CSV file');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('csv_file', file);
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        
+        try {
+            showAlert('Uploading knowledge graph...', 'success');
+            
+            const response = await fetch(`/upload-module-kg-csv/{{ module.id }}/`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (response.ok) {
+                showAlert('Knowledge graph uploaded successfully! Reloading...', 'success');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                showAlert('Error uploading file. Please try again.', 'error');
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+            showAlert('Failed to upload knowledge graph', 'error');
+        }
+        
+        input.value = '';
+    }
+
+    // Show alert message
+    function showAlert(message, type) {
+        const alertBox = document.getElementById('alertBox');
+        alertBox.textContent = message;
+        alertBox.className = `alert alert-${type} show`;
+        
+        setTimeout(() => {
+            alertBox.classList.remove('show');
+        }, 5000);
+    }
+
+    // Dynamic list functions
+    function addRCA() {
+        const list = document.getElementById('rcaList');
+        const item = document.createElement('div');
+        item.className = 'dynamic-item';
+        item.innerHTML = `
+            <input type="text" name="rca_title" placeholder="RCA Title">
+            <textarea name="rca_content" placeholder="RCA Content" rows="3"></textarea>
+            <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
+        `;
+        list.appendChild(item);
+    }
+
+    function addPOS() {
+        const list = document.getElementById('posList');
+        const item = document.createElement('div');
+        item.className = 'dynamic-item';
+        item.innerHTML = `
+            <input type="text" name="pos_name" placeholder="Entity Name">
+            <input type="text" name="pos_reference" placeholder="Reference/Synonym">
+            <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
+        `;
+        list.appendChild(item);
+    }
+
+    function addMetric() {
+        const list = document.getElementById('metricsList');
+        const item = document.createElement('div');
+        item.className = 'dynamic-item';
+        item.innerHTML = `
+            <input type="text" name="metric_name" placeholder="Metric Name">
+            <textarea name="metric_desc" placeholder="Metric Description" rows="2"></textarea>
+            <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
+        `;
+        list.appendChild(item);
+    }
+
+    function removeItem(button) {
+        button.parentElement.remove();
+    }
+
+    // Before form submission, update selected columns
+    document.getElementById('mainForm').addEventListener('submit', function(e) {
+        console.log('📝 Form submitting with selected columns:', selectedColumns);
+        document.getElementById('selectedColumnsInput').value = JSON.stringify(selectedColumns);
+    });
+</script>
+
 </body>
 </html>

@@ -110,29 +110,24 @@ def new_module_view(request):
         except:
             selected_columns = {}
 
-        # Create module with selected tables
+        logger.info(f"📝 Creating module '{module_name}'")
+        logger.info(f"   Tables: {selected_tables}")
+        logger.info(f"   Columns: {selected_columns}")
+
+        # Create module with selected tables AND columns
         module = Module.objects.create(
             user_name=user_name,
             name=module_name,
             tables=selected_tables,
+            selected_columns=selected_columns,  # ← STORE COLUMNS!
         )
         
-        # If user wants to auto-generate KG
-        generate_kg = request.POST.get("generate_kg") == "true"
-        if generate_kg and selected_tables:
-            try:
-                from .utils.kg_generator import generate_knowledge_graph_with_llm
-                logger.info(f"Auto-generating KG for new module '{module_name}' with tables: {selected_tables}")
-                module.knowledge_graph_data = generate_knowledge_graph_with_llm(selected_tables, selected_columns)
-                module.kg_auto_generated = True
-                module.save()
-                logger.info(f"Successfully generated KG for module '{module_name}'")
-            except Exception as e:
-                logger.error(f"Error auto-generating KG for new module: {str(e)}")
-                logger.error(traceback.format_exc())
+        logger.info(f"✅ Created module ID {module.id}")
         
+        # Redirect to edit page (user will click "Update" there to generate KG)
         return redirect("edit_module", module_id=module.id)
 
+    # GET request - show form
     with connection.cursor() as cursor:
         cursor.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
         all_tables = [row[0] for row in cursor.fetchall()]
@@ -149,17 +144,16 @@ def new_module_view(request):
     return render(request, "new_module.html", {"tables": tables, "user_name": user_name})
 
 
-# ---------- EDIT MODULE ----------
-from django.db import connection as django_connection
+# ---------- EDIT MODULE (FIXED) ----------
 def edit_module_view(request, module_id):
-    """Edit module configuration - tables, columns, KG, relationships, etc."""
+    """Edit module - PRESERVES existing KG data, only generates for new entries"""
     user_name = request.session.get("user_name")
     if not user_name:
         return redirect("login")
 
     module = get_object_or_404(Module, id=module_id, user_name=user_name)
 
-    # Get tables - FILTER OUT SYSTEM TABLES
+    # Get tables
     tables = []
     with django_connection.cursor() as cursor:
         cursor.execute("""
@@ -183,7 +177,6 @@ def edit_module_view(request, module_id):
             
             logger.info(f"🔍 Generate KG request for module {module_id}")
             logger.info(f"   Selected tables: {selected_tables}")
-            logger.info(f"   Selected columns JSON: {selected_columns_json}")
             
             try:
                 selected_columns = json.loads(selected_columns_json)
@@ -199,11 +192,20 @@ def edit_module_view(request, module_id):
                     "success": False,
                     "error": "No tables selected"
                 })
+            module.tables = selected_tables
+            module.selected_columns = selected_columns
+            module.save()
+            # ========== KEY FIX: Only generate for NEW tables/columns ==========
             
-            # Get table and column information
-            table_columns = {}
-            with django_connection.cursor() as cursor:
-                for table in selected_tables:
+            # Get existing KG data
+            existing_kg = module.knowledge_graph_data if isinstance(module.knowledge_graph_data, dict) else {}
+            
+            # Determine which tables/columns need AI generation
+            tables_to_generate = {}
+            
+            for table in selected_tables:
+                # Get columns for this table from database
+                with django_connection.cursor() as cursor:
                     cursor.execute("""
                         SELECT column_name, data_type
                         FROM information_schema.columns
@@ -211,59 +213,94 @@ def edit_module_view(request, module_id):
                         ORDER BY ordinal_position
                     """, [table])
                     
-                    cols = cursor.fetchall()
-                    table_columns[table] = []
+                    all_cols = cursor.fetchall()
                     
-                    for col in cols:
-                        col_name = col[0]
-                        # Only include columns that were selected by user
+                    # Filter to only selected columns
+                    table_cols = []
+                    for col_name, col_type in all_cols:
                         if selected_columns.get(table) and col_name in selected_columns[table]:
-                            table_columns[table].append({
-                                "name": col_name,
-                                "type": col[1]
-                            })
+                            # Check if this column already has KG data
+                            if table not in existing_kg or col_name not in existing_kg.get(table, {}):
+                                # NEW column - needs AI generation
+                                table_cols.append({
+                                    "name": col_name,
+                                    "type": col_type
+                                })
+                            else:
+                                logger.info(f"   ✓ Skipping {table}.{col_name} (already has description)")
+                    
+                    if table_cols:
+                        tables_to_generate[table] = table_cols
+                        logger.info(f"   → Will generate KG for {table}: {len(table_cols)} new columns")
             
-            logger.info(f"📊 Prepared table_columns: {table_columns}")
-            
-            # Generate KG using LLM
-            try:
-                from pgadmin.utils.kg_generator import generate_knowledge_graph
+            # Only call AI if there are new tables/columns
+            if tables_to_generate:
+                logger.info(f"🤖 Generating KG for {len(tables_to_generate)} tables with new columns...")
                 
-                logger.info("🤖 Calling generate_knowledge_graph...")
-                kg_data = generate_knowledge_graph(table_columns)
-                
-                logger.info(f"✅ Generated KG data with {len(kg_data)} tables")
-                
-                module.knowledge_graph_data = kg_data
-                module.kg_auto_generated = True
-                module.save()
-                
-                logger.info(f"💾 Saved KG to database for module '{module.name}'")
-                
+                try:
+                    from pgadmin.utils.kg_generator import generate_knowledge_graph
+                    
+                    # Generate only for new entries
+                    new_kg_data = generate_knowledge_graph(tables_to_generate)
+                    
+                    # Merge with existing data (PRESERVE existing descriptions!)
+                    merged_kg = existing_kg.copy()
+                    
+                    for table, columns in new_kg_data.items():
+                        if table not in merged_kg:
+                            merged_kg[table] = {}
+                        
+                        for col, col_data in columns.items():
+                            # Only add if not already present
+                            if col not in merged_kg[table]:
+                                merged_kg[table][col] = col_data
+                                logger.info(f"   ✅ Added KG for {table}.{col}")
+                    
+                    module.knowledge_graph_data = merged_kg
+                    module.kg_auto_generated = True
+                    module.save()
+                    
+                    logger.info(f"💾 Merged KG data: {len(tables_to_generate)} tables updated")
+                    
+                    return JsonResponse({
+                        "success": True,
+                        "message": f"Generated descriptions for {len(tables_to_generate)} new tables/columns!"
+                    })
+                    
+                except ImportError as e:
+                    logger.error(f"❌ Cannot import kg_generator: {e}")
+                    return JsonResponse({
+                        "success": False,
+                        "error": "Knowledge graph generator not available"
+                    })
+                except Exception as e:
+                    logger.error(f"❌ KG generation error: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return JsonResponse({
+                        "success": False,
+                        "error": f"Error generating knowledge graph: {str(e)}"
+                    })
+            else:
+                # No new columns - all already have descriptions
+                logger.info("✅ All selected columns already have descriptions")
                 return JsonResponse({
                     "success": True,
-                    "message": "Knowledge graph generated successfully!"
-                })
-                
-            except ImportError as e:
-                logger.error(f"❌ Cannot import kg_generator: {e}")
-                return JsonResponse({
-                    "success": False,
-                    "error": "Knowledge graph generator not available. Please check your installation."
-                })
-            except Exception as e:
-                logger.error(f"❌ KG generation error: {e}")
-                import traceback
-                traceback.print_exc()
-                return JsonResponse({
-                    "success": False,
-                    "error": f"Error generating knowledge graph: {str(e)}"
+                    "message": "All selected columns already have descriptions. No AI generation needed."
                 })
         
         elif action == "save_all":
             # Update table selections
             selected_tables = request.POST.getlist("selected_tables")
+            selected_columns_json = request.POST.get("selected_columns", "{}")
+            
+            try:
+                selected_columns = json.loads(selected_columns_json)
+            except:
+                selected_columns = {}
+            
             module.tables = selected_tables if selected_tables else []
+            module.selected_columns = selected_columns  # ← SAVE SELECTED COLUMNS
             
             # Get existing KG data
             existing_kg_data = module.knowledge_graph_data if isinstance(module.knowledge_graph_data, dict) else {}
@@ -271,7 +308,7 @@ def edit_module_view(request, module_id):
             # Parse form data for knowledge graph
             kg_data_from_form = {}
             
-            # First, process table info
+            # Process table info
             for key, value in request.POST.items():
                 if key.startswith("table_info__"):
                     table = key.replace("table_info__", "")
@@ -282,7 +319,7 @@ def edit_module_view(request, module_id):
                         "datatype": "meta"
                     }
             
-            # Then process column descriptions
+            # Process column descriptions
             for key, value in request.POST.items():
                 if key.startswith("kg_desc__"):
                     parts = key.split("__", 2)
@@ -339,7 +376,6 @@ def edit_module_view(request, module_id):
                         "right_column": rel_right_columns[i] if i < len(rel_right_columns) else ""
                     })
             module.relationships = relationships_list
-            logger.info(f"💾 Saved {len(relationships_list)} relationships")
             
             # Save RCAs
             rca_list = []
@@ -383,6 +419,7 @@ def edit_module_view(request, module_id):
 
     # GET request - prepare data for template
     selected_tables = module.tables or []
+    selected_columns = module.selected_columns if hasattr(module, 'selected_columns') else {}
     
     # Separate table info from column data
     knowledge_data = {}
@@ -400,6 +437,7 @@ def edit_module_view(request, module_id):
         "module": module,
         "tables": tables,
         "selected_tables": selected_tables,
+        "selected_columns": selected_columns,  # ← PASS TO TEMPLATE
         "knowledge_data": knowledge_data,
         "table_info_map": table_info_map,
         "relationships": module.relationships or [],
@@ -410,7 +448,6 @@ def edit_module_view(request, module_id):
         "kg_auto_generated": module.kg_auto_generated,
         "user_name": user_name,
     })
-
 # ---------- DELETE MODULE ----------
 @csrf_exempt
 @require_http_methods(["DELETE", "POST"])
