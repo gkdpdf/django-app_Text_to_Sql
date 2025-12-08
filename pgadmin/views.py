@@ -1039,3 +1039,190 @@ def delete_conversation(request, conversation_id):
         return JsonResponse({"success": True})
     except Conversation.DoesNotExist:
         return JsonResponse({"error": "Conversation not found"}, status=404)
+
+
+from django.http import StreamingHttpResponse
+import json
+import time
+
+@csrf_exempt
+def chat_api_stream(request):
+    """Streaming chat API with token-by-token response and table display"""
+    
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    def event_stream():
+        """Generator function for Server-Sent Events"""
+        try:
+            # Parse request
+            data = json.loads(request.body)
+            user_message = data.get('message', '')
+            conversation_id = data.get('conversation_id')
+            module_id = data.get('module_id')
+            session_data = data.get('session_data') or {}
+            feedback = data.get('feedback')
+            
+            print(f"\n📨 Chat API (STREAMING) called: message='{user_message}', conv_id={conversation_id}, module_id={module_id}")
+            
+            # Get or create conversation
+            if conversation_id:
+                print(f"📂 Using existing conversation {conversation_id}")
+                conversation = Conversation.objects.get(id=conversation_id)
+            else:
+                print(f"✨ Created new conversation")
+                module = Module.objects.get(id=module_id)
+                conversation = Conversation.objects.create(
+                    module=module,
+                    title=user_message[:50] if user_message else "New Conversation"
+                )
+                conversation_id = conversation.id
+            
+            # Save user message if provided
+            if user_message:
+                Message.objects.create(
+                    conversation=conversation,
+                    role='user',
+                    content=user_message
+                )
+                print(f"💾 Saved user message to DB")
+            
+            # Send conversation ID first
+            yield f"data: {json.dumps({'type': 'conversation_id', 'conversation_id': conversation_id})}\n\n"
+            
+            # Process with feedback
+            if feedback:
+                print(f"🔄 Processing feedback: {feedback}")
+            
+            # Create streaming callback
+            chunks_buffer = []
+            
+            def stream_callback(chunk):
+                """Callback for streaming tokens"""
+                chunks_buffer.append(chunk)
+                # Send token chunk
+                yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
+            
+            # Call invoke_graph with streaming
+            result = invoke_graph(
+                user_query=user_message,
+                module_id=module_id,
+                session_data=session_data,
+                feedback=feedback,
+                stream_callback=stream_callback
+            )
+            
+            # Yield any buffered tokens
+            for chunk in chunks_buffer:
+                yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
+            
+            # Handle different result types
+            result_type = result.get('type', 'response')
+            
+            if result_type == 'clarification':
+                # Send clarification
+                yield f'''data: {json.dumps({
+                    'type': 'clarification',
+                    'message': result.get('message'),
+                    'options': result.get('options'),
+                    'subtype': result.get('subtype'),
+                    'entity': result.get('entity'),
+                    'entity_type': result.get('entity_type'),
+                    'clarification_context': result.get('clarification_context', {}),
+                    'allow_custom': result.get('allow_custom', False),
+                    'session_data': result.get('session_data', {})
+                })}\n\n'''
+                
+            elif result_type == 'response':
+                # Send message
+                message = result.get('message', '')
+                yield f"data: {json.dumps({'type': 'message', 'content': message})}\n\n"
+                
+                # Send SQL
+                sql = result.get('sql', '')
+                if sql:
+                    yield f"data: {json.dumps({'type': 'sql', 'content': sql})}\n\n"
+                
+                # Send table data
+                data = result.get('data', [])
+                chart = result.get('chart')
+                
+                if data and len(data) > 0:
+                    # Send table structure
+                    columns = list(data[0].keys()) if data else []
+                    
+                    yield f'''data: {json.dumps({
+                        'type': 'table',
+                        'columns': columns,
+                        'rows': data
+                    })}\n\n'''
+                
+                # Save assistant message
+                conversation.updated_at = timezone.now()
+                conversation.save()
+                
+                Message.objects.create(
+                    conversation=conversation,
+                    role='assistant',
+                    content=message,
+                    sql_query=sql,
+                    result_data=data if data else None
+                )
+                print(f"💾 Saved assistant message to DB")
+                
+            elif result_type == 'error':
+                # Send error
+                yield f'''data: {json.dumps({
+                    'type': 'error',
+                    'message': result.get('message', 'An error occurred')
+                })}\n\n'''
+            
+            # Send session data
+            yield f'''data: {json.dumps({
+                'type': 'session_data',
+                'session_data': result.get('session_data', {})
+            })}\n\n'''
+            
+            # Send completion
+            yield f'''data: {json.dumps({'type': 'done'})}\n\n'''
+            
+        except Exception as e:
+            print(f"❌ Error in stream: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            yield f'''data: {json.dumps({
+                'type': 'error',
+                'message': f'Error: {str(e)}'
+            })}\n\n'''
+    
+    response = StreamingHttpResponse(
+        event_stream(),
+        content_type='text/event-stream'
+    )
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'
+    
+    return response
+
+
+@csrf_exempt
+def delete_conversation(request, conversation_id):
+    """Delete a conversation"""
+    if request.method != 'DELETE':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        conversation = Conversation.objects.get(id=conversation_id)
+        Message.objects.filter(conversation=conversation).delete()
+        conversation.delete()
+        print(f"🗑️ Deleted conversation {conversation_id}")
+        return JsonResponse({'success': True})
+    except Conversation.DoesNotExist:
+        return JsonResponse({'error': 'Conversation not found'}, status=404)
+    except Exception as e:
+        print(f"❌ Error deleting conversation: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+# Add to urls.py:
+# path('chat/api/stream/', views.chat_api_stream, name='chat_api_stream'),

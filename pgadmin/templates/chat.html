@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ module.name }} - Chat</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             margin: 0;
@@ -167,9 +166,31 @@
             padding: 20px;
         }
 
+        /* MESSAGE DIVIDER - NEW */
+        .message-wrapper {
+            position: relative;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+
+        .message-wrapper::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            height: 1px;
+            background: linear-gradient(to right, transparent, #444654 50%, transparent);
+        }
+
+        .message-wrapper:last-child::after {
+            display: none;
+        }
+
         .message {
             max-width: 800px;
-            margin: 0 auto 24px;
+            margin: 0 auto;
         }
 
         .message-header {
@@ -201,6 +222,7 @@
         .message-content {
             padding-left: 44px;
             line-height: 1.6;
+            white-space: pre-wrap;
         }
 
         .clarification {
@@ -277,6 +299,7 @@
             cursor: pointer;
             transition: all 0.2s;
             text-align: left;
+            white-space: pre-wrap;
         }
 
         .option-btn:hover {
@@ -288,24 +311,105 @@
             cursor: not-allowed;
         }
 
-        .chart-container {
-            background: #444654;
+        /* SQL Code Block */
+        .sql-code {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
             border-radius: 8px;
-            padding: 20px;
-            margin-top: 16px;
-            max-width: 800px;
+            margin: 10px 0;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
         }
 
-        .data-table {
-            overflow-x: auto;
+        .sql-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #444;
+        }
+
+        .sql-title {
+            color: #19c37d;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        .copy-sql-btn {
+            padding: 4px 12px;
+            background: #19c37d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .copy-sql-btn:hover {
+            background: #1a9f6b;
+        }
+
+        /* Table Styles */
+        .data-table-wrapper {
             margin-top: 15px;
             background: white;
             border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
-        .data-table table {
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .table-title {
+            font-weight: 600;
+            color: #495057;
+            font-size: 14px;
+        }
+
+        .export-csv-btn {
+            padding: 6px 12px;
+            background: #19c37d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .export-csv-btn:hover {
+            background: #1a9f6b;
+        }
+
+        .table-scroll {
+            overflow-x: auto;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .data-table {
             width: 100%;
             border-collapse: collapse;
+        }
+
+        .data-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: #667eea;
         }
 
         .data-table th {
@@ -314,16 +418,23 @@
             padding: 12px;
             text-align: left;
             font-weight: 600;
+            font-size: 13px;
+            white-space: nowrap;
         }
 
         .data-table td {
             padding: 10px 12px;
             border-bottom: 1px solid #e0e0e0;
             color: #333;
+            font-size: 13px;
         }
 
-        .data-table tr:hover {
-            background: #f5f5f5;
+        .data-table tbody tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .data-table tbody tr:hover {
+            background: #e9ecef;
         }
 
         .input-container {
@@ -382,6 +493,7 @@
 
         ::-webkit-scrollbar {
             width: 8px;
+            height: 8px;
         }
 
         ::-webkit-scrollbar-track {
@@ -397,6 +509,20 @@
             background: #686b79;
         }
 
+        .table-scroll::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .table-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .table-scroll::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+
         .empty-state {
             text-align: center;
             color: #8e8ea0;
@@ -404,16 +530,14 @@
             font-size: 14px;
         }
 
-        .sql-code {
-            background: #2d2d2d;
-            color: #f8f8f2;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 10px 0;
-            overflow-x: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            line-height: 1.5;
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            
+            .message {
+                max-width: 100%;
+            }
         }
     </style>
 </head>
@@ -448,14 +572,16 @@
             </div>
 
             <div class="messages-container" id="messagesContainer">
-                <div class="message assistant-message">
-                    <div class="message-header">
-                        <div class="avatar assistant-avatar">🤖</div>
-                        <strong>Assistant</strong>
-                    </div>
-                    <div class="message-content">
-                        Hi! I'm your assistant for <strong>{{ module.name }}</strong>. 
-                        I can help you query and analyze data. What would you like to know?
+                <div class="message-wrapper">
+                    <div class="message assistant-message">
+                        <div class="message-header">
+                            <div class="avatar assistant-avatar">🤖</div>
+                            <strong>Assistant</strong>
+                        </div>
+                        <div class="message-content">
+                            Hi! I'm your assistant for <strong>{{ module.name }}</strong>. 
+                            I can help you query and analyze data. What would you like to know?
+                        </div>
                     </div>
                 </div>
             </div>
@@ -479,7 +605,7 @@
     </div>
 
     <script>
-        const MODULE_ID = {{ module_id }};
+        const MODULE_ID = {{ module.id }};
         let currentConversationId = null;
         let pendingClarification = null;
         let sessionData = null;
@@ -502,14 +628,16 @@
             sessionData = null;
             
             document.getElementById('messagesContainer').innerHTML = `
-                <div class="message assistant-message">
-                    <div class="message-header">
-                        <div class="avatar assistant-avatar">🤖</div>
-                        <strong>Assistant</strong>
-                    </div>
-                    <div class="message-content">
-                        Hi! I'm your assistant for <strong>{{ module.name }}</strong>. 
-                        What would you like to know?
+                <div class="message-wrapper">
+                    <div class="message assistant-message">
+                        <div class="message-header">
+                            <div class="avatar assistant-avatar">🤖</div>
+                            <strong>Assistant</strong>
+                        </div>
+                        <div class="message-content">
+                            Hi! I'm your assistant for <strong>{{ module.name }}</strong>. 
+                            What would you like to know?
+                        </div>
                     </div>
                 </div>
             `;
@@ -589,8 +717,8 @@
                     appendSQL(data.sql);
                 }
                 
-                if (data.chart) {
-                    renderChart(data.chart);
+                if (data.data && data.data.length > 0) {
+                    renderTable(data.data);
                 }
             } else if (data.type === 'error') {
                 appendMessage('assistant', '❌ ' + data.message);
@@ -648,9 +776,6 @@
                 return;
             }
 
-            console.log('🔍 Searching for custom value:', customValue);
-
-            // Disable search
             input.disabled = true;
             document.querySelector('.search-btn').disabled = true;
             document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
@@ -664,8 +789,6 @@
                 entity_type: pendingClarification.entity_type,
                 clarification_context: pendingClarification.clarification_context
             };
-
-            console.log('📤 Sending custom search:', feedback);
 
             try {
                 const response = await fetch('/chat/api/', {
@@ -702,9 +825,6 @@
         async function selectOption(optionIndex) {
             const selectedOption = window.currentOptions[optionIndex];
             
-            console.log('✅ Selected:', selectedOption);
-            console.log('📋 Type:', pendingClarification.subtype);
-            
             document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
             if (document.querySelector('.search-input')) {
                 document.querySelector('.search-input').disabled = true;
@@ -720,8 +840,6 @@
                 entity_type: pendingClarification.entity_type,
                 clarification_context: pendingClarification.clarification_context
             };
-
-            console.log('📤 Sending:', feedback);
 
             try {
                 const response = await fetch('/chat/api/', {
@@ -756,6 +874,9 @@
             const container = document.getElementById('messagesContainer');
             const isUser = role === 'user';
             
+            const wrapperDiv = document.createElement('div');
+            wrapperDiv.className = 'message-wrapper';
+            
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
             messageDiv.innerHTML = `
@@ -768,21 +889,128 @@
                 <div class="message-content">${escapeHtml(content)}</div>
             `;
             
-            container.appendChild(messageDiv);
+            wrapperDiv.appendChild(messageDiv);
+            container.appendChild(wrapperDiv);
             container.scrollTop = container.scrollHeight;
         }
 
         function appendSQL(sql) {
             const container = document.getElementById('messagesContainer');
-            const sqlDiv = document.createElement('div');
-            sqlDiv.className = 'sql-code';
-            sqlDiv.textContent = sql;
-            container.appendChild(sqlDiv);
+            const lastWrapper = container.querySelector('.message-wrapper:last-child');
+            
+            if (lastWrapper) {
+                const sqlDiv = document.createElement('div');
+                sqlDiv.innerHTML = `
+                    <div class="sql-code">
+                        <div class="sql-header">
+                            <span class="sql-title">SQL Query</span>
+                            <button class="copy-sql-btn" onclick="copySQL(this)">Copy</button>
+                        </div>
+                        <pre>${escapeHtml(sql)}</pre>
+                    </div>
+                `;
+                lastWrapper.querySelector('.message').appendChild(sqlDiv);
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function copySQL(button) {
+            const sqlCode = button.closest('.sql-code').querySelector('pre').textContent;
+            navigator.clipboard.writeText(sqlCode).then(() => {
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            });
+        }
+
+        function renderTable(data) {
+            if (!data || data.length === 0) return;
+            
+            const container = document.getElementById('messagesContainer');
+            const lastWrapper = container.querySelector('.message-wrapper:last-child');
+            
+            if (!lastWrapper) return;
+            
+            const columns = Object.keys(data[0]);
+            
+            let html = `
+                <div class="data-table-wrapper">
+                    <div class="table-header">
+                        <span class="table-title">Results (${data.length} rows)</span>
+                        <button class="export-csv-btn" onclick="exportToCSV(this)">Export CSV</button>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+            `;
+            
+            columns.forEach(col => {
+                html += `<th>${escapeHtml(col)}</th>`;
+            });
+            
+            html += '</tr></thead><tbody>';
+            
+            data.forEach(row => {
+                html += '<tr>';
+                columns.forEach(col => {
+                    const value = row[col];
+                    let displayValue = value;
+                    
+                    if (value === null || value === undefined) {
+                        displayValue = '-';
+                    } else if (typeof value === 'number') {
+                        displayValue = value.toLocaleString();
+                    }
+                    
+                    html += `<td>${escapeHtml(String(displayValue))}</td>`;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table></div></div>';
+            
+            const tableDiv = document.createElement('div');
+            tableDiv.innerHTML = html;
+            lastWrapper.querySelector('.message').appendChild(tableDiv);
             container.scrollTop = container.scrollHeight;
+        }
+
+        function exportToCSV(button) {
+            const table = button.closest('.data-table-wrapper').querySelector('table');
+            let csv = [];
+            
+            const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent);
+            csv.push(headers.join(','));
+            
+            table.querySelectorAll('tbody tr').forEach(row => {
+                const cells = Array.from(row.querySelectorAll('td')).map(td => {
+                    let value = td.textContent;
+                    if (value.includes(',')) {
+                        value = `"${value}"`;
+                    }
+                    return value;
+                });
+                csv.push(cells.join(','));
+            });
+            
+            const csvContent = csv.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'results.csv';
+            a.click();
+            URL.revokeObjectURL(url);
         }
 
         function appendRawHTML(html) {
             const container = document.getElementById('messagesContainer');
+            const wrapperDiv = document.createElement('div');
+            wrapperDiv.className = 'message-wrapper';
+            
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message assistant-message';
             messageDiv.innerHTML = `
@@ -792,36 +1020,9 @@
                 </div>
                 <div class="message-content">${html}</div>
             `;
-            container.appendChild(messageDiv);
-            container.scrollTop = container.scrollHeight;
-        }
-
-        function renderChart(chartData) {
-            const container = document.getElementById('messagesContainer');
-            const chartContainer = document.createElement('div');
-            chartContainer.className = 'chart-container';
             
-            if (chartData.type === 'table') {
-                let html = '<div class="data-table"><table><thead><tr>';
-                chartData.columns.forEach(col => {
-                    html += `<th>${escapeHtml(col)}</th>`;
-                });
-                html += '</tr></thead><tbody>';
-                
-                chartData.data.forEach(row => {
-                    html += '<tr>';
-                    chartData.columns.forEach(col => {
-                        const value = row[col];
-                        html += `<td>${value !== null && value !== undefined ? escapeHtml(String(value)) : '-'}</td>`;
-                    });
-                    html += '</tr>';
-                });
-                html += '</tbody></table></div>';
-                
-                chartContainer.innerHTML = html;
-            }
-            
-            container.appendChild(chartContainer);
+            wrapperDiv.appendChild(messageDiv);
+            container.appendChild(wrapperDiv);
             container.scrollTop = container.scrollHeight;
         }
 
@@ -879,7 +1080,7 @@
                     
                     if (!msg.is_user && msg.metadata) {
                         if (msg.metadata.sql) appendSQL(msg.metadata.sql);
-                        if (msg.metadata.chart) renderChart(msg.metadata.chart);
+                        if (msg.metadata.data) renderTable(msg.metadata.data);
                     }
                 });
                 
