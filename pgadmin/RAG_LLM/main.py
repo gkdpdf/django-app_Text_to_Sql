@@ -359,10 +359,11 @@ def entity_resolver(user_query, catalog, session_data, feedback=None, module_id=
         entity_type = feedback.get('entity_type')
         context = feedback.get('clarification_context', {})
         
+        # NEW: Multi-select support
+        multiple_values = feedback.get('multiple_values')
+        
         table = context.get('table')
         column = context.get('column')
-        
-        print(f"📌 Value selected: {selected_value}")
         
         if not table or not column:
             if 'last_clarification' in session_data:
@@ -379,13 +380,30 @@ def entity_resolver(user_query, catalog, session_data, feedback=None, module_id=
         if 'resolved_entities' not in session_data:
             session_data['resolved_entities'] = {}
         
-        session_data['resolved_entities'][entity_type] = {
-            "table": table,
-            "column": column,
-            "value": selected_value
-        }
-        
-        print(f"✅ Entity resolved: {entity_type} = {selected_value}\n")
+        # Handle multiple values (OR condition)
+        if multiple_values and len(multiple_values) > 1:
+            print(f"📌 Multiple values selected: {len(multiple_values)} items")
+            print(f"   Values: {multiple_values[:3]}{'...' if len(multiple_values) > 3 else ''}")
+            
+            session_data['resolved_entities'][entity_type] = {
+                "table": table,
+                "column": column,
+                "values": multiple_values,  # Store as array
+                "is_multiple": True
+            }
+            
+            print(f"✅ Multiple entities resolved: {entity_type} = {len(multiple_values)} values\n")
+        else:
+            # Single value (existing behavior)
+            print(f"📌 Value selected: {selected_value}")
+            
+            session_data['resolved_entities'][entity_type] = {
+                "table": table,
+                "column": column,
+                "value": selected_value
+            }
+            
+            print(f"✅ Entity resolved: {entity_type} = {selected_value}\n")
         
         return {
             "needs_clarification": False,
@@ -400,12 +418,82 @@ def entity_resolver(user_query, catalog, session_data, feedback=None, module_id=
         entity_value = feedback.get('entity')
         context = feedback.get('clarification_context', {})
         
+        # NEW: Check for multiple columns selection
+        multiple_values = feedback.get('multiple_values')
+        
         # Recover matches
         matches_by_column = context.get('matches_by_column', {})
         if not matches_by_column and 'last_matches_by_column' in session_data:
             matches_by_column = session_data['last_matches_by_column']
             print(f"   📦 Recovered matches from session")
         
+        # Handle multiple column selection
+        if multiple_values and len(multiple_values) > 1:
+            print(f"📌 Multiple columns selected: {len(multiple_values)} columns")
+            
+            all_values = []
+            primary_table = None
+            primary_column = None
+            
+            for selected in multiple_values:
+                column_key = selected.split('\n')[0].split(' (')[0].strip()
+                
+                if column_key not in matches_by_column:
+                    continue
+                
+                col_data = matches_by_column[column_key]
+                table = col_data['table']
+                column = col_data['column']
+                values = col_data['values']
+                
+                print(f"   → {table}.{column}: {len(values)} values")
+                
+                # Use first column as primary
+                if primary_table is None:
+                    primary_table = table
+                    primary_column = column
+                
+                # Collect all values
+                all_values.extend(values)
+            
+            # Remove duplicates while preserving order
+            unique_values = list(dict.fromkeys(all_values))
+            
+            print(f"   Combined: {len(unique_values)} unique values across {len(multiple_values)} columns")
+            
+            # Store in session
+            session_data['last_clarification'] = {
+                'table': primary_table, 
+                'column': primary_column,
+                'is_multi_column': True,
+                'all_columns': multiple_values
+            }
+            
+            # Ask for value selection from combined list
+            kg_data = config.get('knowledge_graph_data', {})
+            col_desc = ""
+            if primary_table in kg_data and primary_column in kg_data[primary_table]:
+                col_desc = kg_data[primary_table][primary_column].get('desc', '')
+            
+            message = f"Found {len(unique_values)} values across {len(multiple_values)} columns"
+            if col_desc:
+                message += f" ({col_desc})"
+            message += ". Please select one or more:"
+            
+            print(f"   ✅ Returning {len(unique_values)} value options\n")
+            
+            return {
+                "needs_clarification": True,
+                "message": message,
+                "options": [str(v) for v in unique_values[:50]],  # Limit to 50 for performance
+                "subtype": "value_selection",
+                "entity": entity_value,
+                "entity_type": entity_type,
+                "clarification_context": {"table": primary_table, "column": primary_column},
+                "allow_custom": True
+            }
+        
+        # Single column selection (existing logic)
         column_key = selected_option.split('\n')[0].split(' (')[0].strip()
         
         print(f"📌 Column selected: {column_key}")
@@ -457,7 +545,7 @@ def entity_resolver(user_query, catalog, session_data, feedback=None, module_id=
             message = f"Found {len(values)} values in {column}"
             if col_desc:
                 message += f" ({col_desc})"
-            message += ". Please select one:"
+            message += ". Please select one or more:"
             
             print(f"   ✅ Returning {len(values)} value options\n")
             
@@ -720,15 +808,35 @@ def generate_sql_with_llm(user_query, entities, config, intent="total", temporal
     for entity_type, entity_data in entities.items():
         table = entity_data.get('table')
         column = entity_data.get('column')
-        value = entity_data.get('value')
         
-        if table and column and value:
-            tables_used.add(table)
-            if isinstance(value, str):
-                escaped = value.replace("'", "''")
-                where_conditions.append(f'{table}."{column}" = \'{escaped}\'')
-            else:
-                where_conditions.append(f'{table}."{column}" = {value}')
+        # NEW: Handle multiple values (OR condition with IN clause)
+        if entity_data.get('is_multiple'):
+            values = entity_data.get('values', [])
+            if values and table and column:
+                tables_used.add(table)
+                # Create IN clause for multiple values
+                escaped_values = []
+                for v in values:
+                    if isinstance(v, str):
+                        escaped = v.replace("'", "''")
+                        escaped_values.append(f"'{escaped}'")
+                    else:
+                        escaped_values.append(str(v))
+                
+                in_clause = f'{table}."{column}" IN ({", ".join(escaped_values)})'
+                where_conditions.append(in_clause)
+                print(f"   Using IN clause with {len(values)} values")
+        else:
+            # Single value (existing behavior)
+            value = entity_data.get('value')
+            
+            if table and column and value:
+                tables_used.add(table)
+                if isinstance(value, str):
+                    escaped = value.replace("'", "''")
+                    where_conditions.append(f'{table}."{column}" = \'{escaped}\'')
+                else:
+                    where_conditions.append(f'{table}."{column}" = {value}')
     
     # Add temporal filter
     temporal_filter = ""
@@ -988,19 +1096,75 @@ def format_results(data, intent, temporal_info=None):
     return f"Found {len(data)} results"
 
 
-def invoke_graph(user_query, module_id, session_data=None, feedback=None, stream_callback=None):
-    """Main entry point"""
+def invoke_graph(user_query, module_id, session_data=None, feedback=None, stream_callback=None, context_settings=None):
+    """Main entry point
+    
+    Args:
+        user_query: User's question
+        module_id: Module ID
+        session_data: Session state
+        feedback: User feedback for clarifications
+        stream_callback: Optional streaming callback
+        context_settings: Dict with context toggle flags (use_kg, use_relationships, use_rca, use_extra_suggestions, use_pos)
+    """
     
     print("\n" + "🔵"*40)
     print("🚀 INVOKE_GRAPH")
     print(f"   Query: {user_query}")
     print(f"   Feedback: {feedback.get('type') if feedback else 'None'}")
+    
+    # NEW: Log context settings
+    if context_settings:
+        print(f"📊 Context Settings:")
+        print(f"   KG: {'✅' if context_settings.get('use_kg', True) else '❌'}")
+        print(f"   Relationships: {'✅' if context_settings.get('use_relationships', True) else '❌'}")
+        print(f"   RCA: {'✅' if context_settings.get('use_rca', True) else '❌'}")
+        print(f"   Extra Suggestions: {'✅' if context_settings.get('use_extra_suggestions', True) else '❌'}")
+        print(f"   POS: {'✅' if context_settings.get('use_pos', True) else '❌'}")
+    else:
+        print(f"📊 Context Settings: All enabled (default)")
+    
     print("🔵"*40 + "\n")
     
     try:
         from pgadmin.RAG_LLM.django_loader import load_module_config
         
+        # Load config normally
         config = load_module_config(module_id)
+        
+        # NEW: Filter context based on settings
+        if context_settings:
+            # Default all to True if not specified
+            use_kg = context_settings.get('use_kg', True)
+            use_relationships = context_settings.get('use_relationships', True)
+            use_rca = context_settings.get('use_rca', True)
+            use_extra_suggestions = context_settings.get('use_extra_suggestions', True)
+            use_pos = context_settings.get('use_pos', True)
+            
+            # Filter Knowledge Graph
+            if not use_kg:
+                config['kg_data'] = {}
+                print("   ⚠️ Knowledge Graph disabled")
+            
+            # Filter Relationships
+            if not use_relationships:
+                config['relationships'] = []
+                print("   ⚠️ Relationships disabled")
+            
+            # Filter RCA
+            if not use_rca:
+                config['rca'] = []
+                print("   ⚠️ RCA disabled")
+            
+            # Filter Extra Suggestions
+            if not use_extra_suggestions:
+                config['extra_suggestions'] = ''
+                print("   ⚠️ Extra Suggestions disabled")
+            
+            # Filter POS Tagging
+            if not use_pos:
+                config['pos_tagging'] = []
+                print("   ⚠️ POS Tagging disabled")
         
         catalog = {}
         for table, columns in config['table_columns'].items():

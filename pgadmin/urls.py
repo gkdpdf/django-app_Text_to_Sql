@@ -39,4 +39,9 @@ urlpatterns = [
     path('get-table-columns/', views.get_table_columns_view, name='get_table_columns'),
     #path('conversation/<int:conversation_id>/delete/', views.delete_conversation, name='delete_conversation'),
     # path('chat/api/stream/', views.chat_api_stream, name='chat_api_stream'),
+
+
+    path('knowledge-graph/', views.knowledge_graph_view, name='knowledge_graph'),
+    path('knowledge-graph/download/', views.download_knowledge_graph_csv, name='download_knowledge_graph'),
+    path('knowledge-graph/upload/', views.upload_knowledge_graph, name='upload_knowledge_graph'),
 ]

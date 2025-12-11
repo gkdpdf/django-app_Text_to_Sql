@@ -1,478 +1,282 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Login - PostgreSQL Viewer</title>
+
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root{
+            --bg:#181920;
+            --panel:#24262e;
+            --card:#2a2c35;
+            --muted:#9aa0b2;
+            --text:#e6e9ef;
+            --accent1:#4f78ff;
+            --accent2:#6c4dff;
+            --success:#10b981;
+            --danger:#ef4444;
+            --glass: rgba(255,255,255,0.02);
+            --radius:12px;
         }
 
-        /* Animations */
-        @keyframes gradient {
-            0% {
-                background-position: 0% 50%;
-            }
-            50% {
-                background-position: 100% 50%;
-            }
-            100% {
-                background-position: 0% 50%;
-            }
+        *{box-sizing:border-box;margin:0;padding:0}
+        html,body{height:100%}
+        body{
+            font-family:'Poppins',sans-serif;
+            background: linear-gradient(180deg,#15161a 0%, #1a1c22 100%);
+            color:var(--text);
+            -webkit-font-smoothing:antialiased;
+            -moz-osx-font-smoothing:grayscale;
+            min-height:100vh;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            padding:28px;
         }
 
-        @keyframes float {
-            0%, 100% {
-                transform: translateY(0px) scale(1);
-            }
-            50% {
-                transform: translateY(-20px) scale(1.1);
-            }
+        /* centered card similar to edit_module dark UI */
+        .wrap {
+            width: 480px;
+            max-width:96%;
         }
 
-        @keyframes slideInUp {
-            from {
-                transform: translateY(30px);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-
-        @keyframes glow {
-            0% {
-                box-shadow: 0 0 5px rgba(102, 126, 234, 0.5);
-            }
-            50% {
-                box-shadow: 0 0 20px rgba(102, 126, 234, 0.8), 0 0 40px rgba(102, 126, 234, 0.4);
-            }
-            100% {
-                box-shadow: 0 0 5px rgba(102, 126, 234, 0.5);
-            }
-        }
-
-        body {
-            font-family: 'Poppins', sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            position: relative;
+        .card {
+            background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.015));
+            border: 1px solid rgba(255,255,255,0.03);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+            border-radius: 16px;
+            padding: 28px;
             overflow: hidden;
         }
 
-        /* Animated gradient background */
-        .animated-bg {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #f5576c);
-            background-size: 400% 400%;
-            animation: gradient 15s ease infinite;
-            z-index: -2;
+        .brand {
+            display:flex;
+            gap:14px;
+            align-items:center;
+            margin-bottom:18px;
         }
 
-        /* Floating blur effects */
-        .floating-elements {
-            position: fixed;
-            width: 100%;
-            height: 100%;
-            top: 0;
-            left: 0;
-            pointer-events: none;
-            overflow: hidden;
-            z-index: -1;
+        .logo {
+            width:56px;height:56px;border-radius:12px;
+            background:linear-gradient(135deg,var(--accent1),var(--accent2));
+            display:flex;align-items:center;justify-content:center;
+            font-size:22px;
+            box-shadow: 0 6px 20px rgba(79,120,255,0.12);
         }
 
-        .floating-circle {
-            position: absolute;
-            border-radius: 50%;
-            mix-blend-mode: multiply;
-            filter: blur(40px);
-            opacity: 0.7;
-            animation: float 6s ease-in-out infinite;
+        .brand h1{
+            font-size:20px;
+            color:var(--text);
+            margin:0;
+            font-weight:700;
         }
 
-        .circle-1 {
-            width: 300px;
-            height: 300px;
-            background: rgba(102, 126, 234, 0.3);
-            top: 10%;
-            left: 10%;
+        .brand p{
+            margin:0;
+            color:var(--muted);
+            font-size:0.92rem;
+            margin-top:3px;
         }
 
-        .circle-2 {
-            width: 350px;
-            height: 350px;
-            background: rgba(118, 75, 162, 0.3);
-            top: 60%;
-            right: 10%;
-            animation-delay: 2s;
+        .card-body { margin-top: 10px; }
+
+        label.section-title {
+            display:block;
+            font-size:0.95rem;
+            color:var(--muted);
+            margin-bottom:10px;
+            font-weight:600;
         }
 
-        .circle-3 {
-            width: 400px;
-            height: 400px;
-            background: rgba(240, 147, 251, 0.3);
-            bottom: 10%;
-            left: 50%;
-            transform: translateX(-50%);
-            animation-delay: 4s;
+        .form-row {
+            display:flex;
+            flex-direction:column;
+            gap:12px;
+            margin-bottom:14px;
         }
 
-        .circle-4 {
-            width: 250px;
-            height: 250px;
-            background: rgba(245, 87, 108, 0.3);
-            top: 30%;
-            right: 30%;
-            animation-delay: 1s;
+        input[type="text"], input[type="password"] {
+            width:100%;
+            padding:12px 14px;
+            border-radius:10px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.015));
+            color:var(--text);
+            border:1px solid rgba(255,255,255,0.03);
+            font-size:0.98rem;
+            transition: box-shadow 0.18s ease, border-color 0.18s ease;
+            outline:none;
+            -webkit-appearance:none;
         }
 
-        /* Container with glass effect */
-        .container {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            padding: 50px 60px;
-            border-radius: 25px;
-            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.2);
-            width: 450px;
-            max-width: 90%;
-            text-align: center;
-            position: relative;
-            animation: slideInUp 0.6s ease-out;
+        input::placeholder { color: rgba(230,233,239,0.35); }
+
+        input:focus {
+            box-shadow: 0 6px 18px rgba(79,120,255,0.06);
+            border-color: rgba(79,120,255,0.28);
         }
 
-        .container::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 100px;
-            height: 4px;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            border-radius: 2px;
+        .submit-row {
+            display:flex;
+            gap:12px;
+            align-items:center;
+            margin-top:8px;
         }
 
-        h2 {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-size: 2.2em;
-            font-weight: 600;
-            margin-bottom: 20px;
+        button.primary {
+            background: linear-gradient(135deg,var(--accent1),var(--accent2));
+            color:white;
+            padding:11px 18px;
+            border-radius:10px;
+            border:none;
+            font-weight:600;
+            cursor:pointer;
+            min-width:120px;
+            box-shadow: 0 8px 30px rgba(79,120,255,0.12);
+            transition: transform .12s ease, opacity .12s ease;
         }
 
-        .logo-icon {
-            width: 80px;
-            height: 80px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px auto;
-            font-size: 2.5em;
-            animation: glow 3s ease-in-out infinite;
+        button.primary:active{ transform: translateY(1px) }
+        button.ghost {
+            background: transparent;
+            color: var(--muted);
+            border: 1px solid rgba(255,255,255,0.03);
+            padding:11px 16px;
+            border-radius:10px;
+            cursor:pointer;
+            font-weight:600;
         }
 
-        input[type="text"],
-        input[type="password"] {
-            width: 100%;
-            padding: 14px 20px;
-            margin: 10px 0;
-            border-radius: 15px;
-            border: 2px solid transparent;
-            background: rgba(102, 126, 234, 0.05);
-            font-size: 1em;
-            transition: all 0.3s ease;
-            font-family: 'Poppins', sans-serif;
+        .helper {
+            color:var(--muted);
+            font-size:0.9rem;
+            margin-top:12px;
         }
 
-        input[type="text"]:focus,
-        input[type="password"]:focus {
-            outline: none;
-            border: 2px solid #667eea;
-            background: white;
-            box-shadow: 0 0 15px rgba(102, 126, 234, 0.1);
+        .alert {
+            margin-top:14px;
+            padding:10px 12px;
+            border-radius:10px;
+            font-size:0.95rem;
         }
 
-        button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 14px 40px;
-            border: none;
-            border-radius: 15px;
-            cursor: pointer;
-            font-size: 1.1em;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            margin-top: 20px;
-            width: 100%;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        .alert.error {
+            background: rgba(239,68,68,0.06);
+            color: #ffb4b4;
+            border:1px solid rgba(239,68,68,0.08);
         }
 
-        button:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        .table-select {
+            margin-top:18px;
+            background:var(--glass);
+            border-radius:12px;
+            padding:12px;
+            border:1px solid rgba(255,255,255,0.02);
+            max-height:220px;
+            overflow:auto;
         }
 
-        button:active {
-            transform: translateY(-1px);
+        .table-item {
+            display:flex;
+            align-items:center;
+            gap:10px;
+            padding:8px;
+            border-radius:8px;
+            transition: background .12s ease, transform .12s ease;
         }
 
-        .error {
-            color: #e74c3c;
-            margin-top: 15px;
-            padding: 10px;
-            background: rgba(231, 76, 60, 0.1);
-            border-radius: 10px;
-            font-size: 0.95em;
+        .table-item:hover {
+            background: rgba(255,255,255,0.01);
+            transform: translateX(4px);
         }
 
-        .table-list {
-            text-align: left;
-            margin-top: 30px;
-            background: rgba(102, 126, 234, 0.05);
-            border-radius: 20px;
-            padding: 25px;
-            max-height: 300px;
-            overflow-y: auto;
+        .table-item input[type="checkbox"]{
+            width:18px;height:18px;
+            accent-color: var(--accent1);
         }
 
-        .table-list::-webkit-scrollbar {
-            width: 8px;
-        }
+        .muted-small { color: var(--muted); font-size:0.9rem; }
 
-        .table-list::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 10px;
-        }
-
-        .table-list::-webkit-scrollbar-thumb {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 10px;
-        }
-
-        .table-list h3 {
-            color: #667eea;
-            margin-bottom: 20px;
-            font-size: 1.2em;
-            font-weight: 600;
-        }
-
-        .table-list ul {
-            list-style-type: none;
-            padding: 0;
-        }
-
-        .table-list li {
-            padding: 12px 15px;
-            margin-bottom: 8px;
-            background: white;
-            border-radius: 12px;
-            transition: all 0.3s ease;
-            border: 2px solid transparent;
-        }
-
-        .table-list li:hover {
-            border-color: #667eea;
-            transform: translateX(5px);
-            box-shadow: 0 3px 10px rgba(102, 126, 234, 0.1);
-        }
-
-        .table-list label {
-            display: flex;
-            align-items: center;
-            cursor: pointer;
-            width: 100%;
-        }
-
-        .table-list input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            margin-right: 12px;
-            cursor: pointer;
-            accent-color: #667eea;
-        }
-
-        .module-name-input {
-            width: 100%;
-            padding: 14px 20px;
-            margin: 20px 0;
-            border-radius: 15px;
-            border: 2px solid transparent;
-            background: white;
-            font-size: 1em;
-            transition: all 0.3s ease;
-            font-family: 'Poppins', sans-serif;
-        }
-
-        .module-name-input:focus {
-            outline: none;
-            border: 2px solid #667eea;
-            box-shadow: 0 0 15px rgba(102, 126, 234, 0.1);
-        }
-
-        .welcome-badge {
-            display: inline-block;
-            padding: 8px 20px;
-            background: rgba(102, 126, 234, 0.1);
-            border-radius: 20px;
-            color: #667eea;
-            font-size: 0.9em;
-            margin-bottom: 20px;
-        }
-
-        .divider {
-            width: 100%;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, #667eea, transparent);
-            margin: 30px 0;
-        }
-
-        /* Responsive design */
-        @media (max-width: 500px) {
-            .container {
-                padding: 30px 25px;
-            }
-
-            h2 {
-                font-size: 1.8em;
-            }
-
-            .logo-icon {
-                width: 60px;
-                height: 60px;
-                font-size: 2em;
-            }
-        }
-
-        /* Additional effects */
-        .input-group {
-            position: relative;
-            margin-bottom: 20px;
-        }
-
-        .input-icon {
-            position: absolute;
-            left: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #667eea;
-            font-size: 1.2em;
-        }
-
-        .input-with-icon {
-            padding-left: 45px !important;
+        @media (max-width:520px){
+            .wrap{ width: 94% }
+            .brand h1{ font-size:18px }
         }
     </style>
 </head>
 <body>
-    <!-- Animated gradient background -->
-    <div class="animated-bg"></div>
-
-    <!-- Floating blur effects -->
-    <div class="floating-elements">
-        <div class="floating-circle circle-1"></div>
-        <div class="floating-circle circle-2"></div>
-        <div class="floating-circle circle-3"></div>
-        <div class="floating-circle circle-4"></div>
-    </div>
-
-    <!-- Main container -->
-    <div class="container">
-        {% if user_name %}
-            <!-- ========== Logged In View ========== -->
-            <div class="logo-icon">
-                📊
-            </div>
-            <h2>Welcome Back!</h2>
-            <div class="welcome-badge">
-                👤 {{ user_name|title }}
-            </div>
-
-            <div class="table-list">
-                <h3>🗂️ Select Tables for New Module</h3>
-                <form method="POST" action="{% url 'create_module' %}">
-                    {% csrf_token %}
-                    {% if tables %}
-                        <ul>
-                            {% for table in tables %}
-                                <li>
-                                    <label>
-                                        <input type="checkbox" name="selected_tables" value="{{ table }}">
-                                        <span>{{ table }}</span>
-                                    </label>
-                                </li>
-                            {% endfor %}
-                        </ul>
-
-                        <div class="divider"></div>
-
-                        <input type="text" 
-                               name="module_name" 
-                               class="module-name-input" 
-                               placeholder="✨ Enter Module Name" 
-                               required>
-                        
-                        <button type="submit">
-                            🚀 Create Module
-                        </button>
-                    {% else %}
-                        <p style="text-align: center; color: #666; padding: 20px;">
-                            📭 No user-defined tables found in your database.
-                        </p>
-                    {% endif %}
-                </form>
-            </div>
-
-        {% else %}
-            <!-- ========== Login Form ========== -->
-            <div class="logo-icon">
-                🔐
-            </div>
-            <h2>Welcome Back</h2>
-            <p style="color: #888; margin-bottom: 30px;">Login to manage your PostgreSQL modules</p>
-            
-            <form method="POST" action="">
-                {% csrf_token %}
-                <div class="input-group">
-                    <input type="text" 
-                           name="username" 
-                           placeholder="👤 Username" 
-                           required>
+    <div class="wrap">
+        <div class="card">
+            {% if user_name %}
+                <!-- Logged-in quick-create UI (keeps original logic) -->
+                <div class="brand">
+                    <div class="logo">📊</div>
+                    <div>
+                        <h1>Welcome back, {{ user_name|title }}</h1>
+                        <p class="muted-small">Create a new module quickly — select tables and save</p>
+                    </div>
                 </div>
-                
-                <div class="input-group">
-                    <input type="password" 
-                           name="password" 
-                           placeholder="🔑 Password" 
-                           required>
-                </div>
-                
-                <button type="submit">
-                    Login →
-                </button>
-            </form>
 
-            {% if error_message %}
-                <div class="error">
-                    ⚠️ {{ error_message }}
+                <div class="card-body">
+                    <form method="POST" action="{% url 'create_module' %}">
+                        {% csrf_token %}
+                        <label class="section-title">Select Tables</label>
+
+                        {% if tables %}
+                            <div class="table-select">
+                                {% for table in tables %}
+                                    <div class="table-item">
+                                        <input type="checkbox" name="selected_tables" value="{{ table }}" id="tbl_{{ forloop.counter }}">
+                                        <label for="tbl_{{ forloop.counter }}" class="muted-small">{{ table }}</label>
+                                    </div>
+                                {% endfor %}
+                            </div>
+
+                            <label class="section-title" style="margin-top:14px">Module name</label>
+                            <input type="text" name="module_name" class="module-name-input" placeholder="eg. sales_analysis" required>
+
+                            <div class="submit-row">
+                                <button type="submit" class="primary">🚀 Create Module</button>
+                                <button type="button" class="ghost" onclick="location.href='{% url 'dashboard' %}'">← Back to Dashboard</button>
+                            </div>
+                        {% else %}
+                            <p class="helper">No user tables found in database.</p>
+                        {% endif %}
+                    </form>
+                </div>
+
+            {% else %}
+                <!-- Login form (same logic as original) -->
+                <div class="brand">
+                    <div class="logo">🔐</div>
+                    <div>
+                        <h1>Sign in</h1>
+                        <p class="muted-small">Login to manage your PostgreSQL modules</p>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <form method="POST" action="">
+                        {% csrf_token %}
+                        <label class="section-title">Username</label>
+                        <input type="text" name="username" placeholder="Username" required>
+
+                        <label class="section-title">Password</label>
+                        <input type="password" name="password" placeholder="Password" required>
+
+                        <div class="submit-row">
+                            <button type="submit" class="primary">Login</button>
+                            <button type="button" class="ghost" onclick="location.href='/'">Cancel</button>
+                        </div>
+
+                        {% if error_message %}
+                            <div class="alert error">{{ error_message }}</div>
+                        {% endif %}
+                    </form>
                 </div>
             {% endif %}
-        {% endif %}
+        </div>
     </div>
 </body>
 </html>
