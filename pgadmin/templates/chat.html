@@ -1,574 +1,171 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>{{ module.name }} - Chat</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #343541;
-            color: #ececf1;
-            height: 100vh;
-            overflow: hidden;
-        }
-
-        .chat-container {
-            display: flex;
-            height: 100vh;
-        }
-
-        .sidebar {
-            width: 260px;
-            background: #202123;
-            border-right: 1px solid #444654;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .sidebar-header {
-            padding: 16px;
-            border-bottom: 1px solid #444654;
-        }
-
-        .new-chat-btn {
-            width: 100%;
-            padding: 12px;
-            background: transparent;
-            border: 1px solid #565869;
-            border-radius: 6px;
-            color: #ececf1;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .new-chat-btn:hover {
-            background: #2a2b32;
-        }
-
-        .module-info {
-            padding: 12px 16px;
-            border-bottom: 1px solid #444654;
-            font-size: 12px;
-            color: #8e8ea0;
-        }
-
-        .module-name {
-            font-weight: 600;
-            color: #ececf1;
-            margin-bottom: 4px;
-        }
-
-        .conversations-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 8px;
-        }
-
-        .conversation-item {
-            padding: 12px;
-            margin-bottom: 4px;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background 0.2s;
-            font-size: 14px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            color: #ececf1;
-            position: relative;
-        }
-
-        .conversation-item:hover {
-            background: #2a2b32;
-        }
-
-        .conversation-item.active {
-            background: #343541;
-        }
-
-        .delete-conv-btn {
-            position: absolute;
-            right: 8px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: transparent;
-            border: none;
-            color: #8e8ea0;
-            cursor: pointer;
-            padding: 4px 8px;
-            border-radius: 4px;
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-
-        .conversation-item:hover .delete-conv-btn {
-            opacity: 1;
-        }
-
-        .delete-conv-btn:hover {
-            background: #565869;
-            color: #ececf1;
-        }
-
-        .sidebar-footer {
-            padding: 16px;
-            border-top: 1px solid #444654;
-        }
-
-        .back-btn {
-            width: 100%;
-            padding: 10px;
-            background: transparent;
-            border: 1px solid #565869;
-            border-radius: 6px;
-            color: #ececf1;
-            cursor: pointer;
-            text-decoration: none;
-            display: block;
-            text-align: center;
-            transition: all 0.2s;
-        }
-
-        .back-btn:hover {
-            background: #2a2b32;
-        }
-
-        .main-chat {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .chat-header {
-            padding: 16px 20px;
-            border-bottom: 1px solid #444654;
-            background: #343541;
-        }
-
-        .chat-header h2 {
-            font-size: 16px;
-            font-weight: 600;
-        }
-
-        .messages-container {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-        }
-
-        /* MESSAGE DIVIDER - NEW */
-        .message-wrapper {
-            position: relative;
-            padding-bottom: 20px;
-            margin-bottom: 20px;
-        }
-
-        .message-wrapper::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 90%;
-            height: 1px;
-            background: linear-gradient(to right, transparent, #444654 50%, transparent);
-        }
-
-        .message-wrapper:last-child::after {
-            display: none;
-        }
-
-        .message {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        .message-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 8px;
-        }
-
-        .avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            font-size: 14px;
-        }
-
-        .user-avatar {
-            background: #5436da;
-        }
-
-        .assistant-avatar {
-            background: #19c37d;
-        }
-
-        .message-content {
-            padding-left: 44px;
-            line-height: 1.6;
-            white-space: pre-wrap;
-        }
-
-        .clarification {
-            padding: 16px;
-            background: #444654;
-            border-radius: 8px;
-            margin-top: 12px;
-        }
-
-        .clarification-title {
-            font-weight: 600;
-            margin-bottom: 12px;
-        }
-
-        .search-box-container {
-            margin-bottom: 12px;
-            padding: 12px;
-            background: #565869;
-            border-radius: 6px;
-        }
-
-        .search-box-label {
-            font-size: 13px;
-            color: #ececf1;
-            margin-bottom: 8px;
-        }
-
-        .search-input-wrapper {
-            display: flex;
-            gap: 8px;
-        }
-
-        .search-input {
-            flex: 1;
-            padding: 8px 12px;
-            background: #40414f;
-            border: 1px solid #686b79;
-            border-radius: 4px;
-            color: #ececf1;
-            font-size: 14px;
-        }
-
-        .search-input:focus {
-            outline: none;
-            border-color: #19c37d;
-        }
-
-        .search-btn {
-            padding: 8px 16px;
-            background: #19c37d;
-            border: none;
-            border-radius: 4px;
-            color: white;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .search-btn:hover {
-            background: #1a9f6b;
-        }
-
-        .options-list {
-            display: grid;
-            gap: 8px;
-        }
-
-        .option-btn {
-            padding: 10px 16px;
-            background: #565869;
-            border: 1px solid #686b79;
-            border-radius: 6px;
-            color: #ececf1;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-align: left;
-            white-space: pre-wrap;
-        }
-
-        .option-btn:hover {
-            background: #686b79;
-        }
-
-        .option-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* SQL Code Block */
-        .sql-code {
-            background: #2d2d2d;
-            color: #f8f8f2;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 10px 0;
-            overflow-x: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            line-height: 1.5;
-        }
-
-        .sql-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #444;
-        }
-
-        .sql-title {
-            color: #19c37d;
-            font-weight: 600;
-            font-size: 12px;
-            text-transform: uppercase;
-        }
-
-        .copy-sql-btn {
-            padding: 4px 12px;
-            background: #19c37d;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 11px;
-            font-weight: 500;
-        }
-
-        .copy-sql-btn:hover {
-            background: #1a9f6b;
-        }
-
-        /* Table Styles */
-        .data-table-wrapper {
-            margin-top: 15px;
-            background: white;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .table-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 16px;
-            background: #f8f9fa;
-            border-bottom: 2px solid #dee2e6;
-        }
-
-        .table-title {
-            font-weight: 600;
-            color: #495057;
-            font-size: 14px;
-        }
-
-        .export-csv-btn {
-            padding: 6px 12px;
-            background: #19c37d;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 500;
-        }
-
-        .export-csv-btn:hover {
-            background: #1a9f6b;
-        }
-
-        .table-scroll {
-            overflow-x: auto;
-            max-height: 500px;
-            overflow-y: auto;
-        }
-
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .data-table thead {
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            background: #667eea;
-        }
-
-        .data-table th {
-            background: #667eea;
-            color: white;
-            padding: 12px;
-            text-align: left;
-            font-weight: 600;
-            font-size: 13px;
-            white-space: nowrap;
-        }
-
-        .data-table td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #e0e0e0;
-            color: #333;
-            font-size: 13px;
-        }
-
-        .data-table tbody tr:nth-child(even) {
-            background: #f8f9fa;
-        }
-
-        .data-table tbody tr:hover {
-            background: #e9ecef;
-        }
-
-        .input-container {
-            padding: 16px 20px;
-            background: #343541;
-            border-top: 1px solid #444654;
-        }
-
-        .input-wrapper {
-            max-width: 800px;
-            margin: 0 auto;
-            position: relative;
-        }
-
-        .input-box {
-            width: 100%;
-            padding: 14px 50px 14px 16px;
-            background: #40414f;
-            border: 1px solid #565869;
-            border-radius: 12px;
-            color: #ececf1;
-            font-size: 15px;
-            resize: none;
-            font-family: inherit;
-        }
-
-        .input-box:focus {
-            outline: none;
-            border-color: #8e8ea0;
-        }
-
-        .send-btn {
-            position: absolute;
-            right: 12px;
-            bottom: 10px;
-            width: 32px;
-            height: 32px;
-            background: #19c37d;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-
-        .send-btn:hover {
-            background: #1a9f6b;
-        }
-
-        .send-btn:disabled {
-            background: #565869;
-            cursor: not-allowed;
-        }
-
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #202123;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #565869;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #686b79;
-        }
-
-        .table-scroll::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        .table-scroll::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
-
-        .table-scroll::-webkit-scrollbar-thumb {
-            background: #c1c1c1;
-            border-radius: 4px;
-        }
-
-        .empty-state {
-            text-align: center;
-            color: #8e8ea0;
-            padding: 20px;
-            font-size: 14px;
-        }
-
-        @media (max-width: 768px) {
-            .sidebar {
-                display: none;
-            }
-            
-            .message {
-                max-width: 100%;
-            }
-        }
+        /* Compact UI + header status */
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:'Inter',system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial;background:#343541;color:#ececf1;height:100vh;overflow:hidden}
+        .chat-container{display:flex;height:100vh}
+        .sidebar{width:260px;background:#1b1c20;border-right:1px solid #444654;display:flex;flex-direction:column;padding:10px;gap:8px}
+        .sidebar-header{padding:8px;border-bottom:1px solid #444654}
+        .new-chat-btn{width:100%;padding:9px;border-radius:8px;border:1px solid #565869;background:transparent;color:#ececf1;cursor:pointer;font-size:13px;font-weight:600}
+        .module-info{padding:10px 8px;border-bottom:1px solid #444654;font-size:12px;color:#b9bbca}
+        .module-name{font-weight:700;color:#fff;margin-bottom:4px}
+        .conversations-list{flex:1;overflow-y:auto;padding:8px}
+        .conversation-item{padding:10px;margin-bottom:6px;border-radius:6px;cursor:pointer;transition:background .12s;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#ececf1;position:relative}
+        .conversation-item:hover{background:#2a2b32}.conversation-item.active{background:#2f3136}
+        .delete-conv-btn{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:#9aa0b0;cursor:pointer;padding:4px;border-radius:4px;opacity:0;transition:opacity .12s}
+        .conversation-item:hover .delete-conv-btn{opacity:1}
+        .sidebar-footer{padding:8px;border-top:1px solid #444654}
+        .back-btn{width:100%;padding:8px;border-radius:6px;border:1px solid #565869;color:#ececf1;background:transparent;text-decoration:none;display:block;text-align:center;font-weight:600;font-size:13px}
+
+        .main-chat{flex:1;display:flex;flex-direction:column;min-width:0}
+        .chat-header{padding:12px 16px;border-bottom:1px solid #444654;background:#343541;display:flex;align-items:center;justify-content:space-between}
+        .chat-header h2{font-size:15px;font-weight:700;margin:0}
+
+        /* header status (top-right) */
+        .header-status { display:flex; gap:8px; align-items:center; }
+        .status-badge { font-size:12px; padding:6px 10px; border-radius:999px; background:#3a3b42; color:#cfd3da; border:1px solid rgba(255,255,255,0.03); display:inline-flex; gap:8px; align-items:center; }
+        .status-on { background: linear-gradient(90deg,#10b981,#059669); color:#fff; box-shadow:0 6px 18px rgba(16,185,129,0.12); }
+        .status-off { background: transparent; color:#bfc3cb; border:1px solid rgba(255,255,255,0.03); }
+
+        /* Context panel */
+        .context-settings-panel{background:linear-gradient(135deg,#667eea10 0%,#764ba210 100%);border:1px solid #667eea25;border-radius:10px;margin:10px 16px;overflow:hidden}
+        .context-header{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;background:rgba(255,255,255,0.01)}
+        .context-title{font-weight:700;font-size:14px;color:#cfe0ff}
+        .toggle-panel-btn{background:none;border:none;color:#cfe0ff;cursor:pointer;font-size:13px;padding:4px 8px}
+        .context-content{padding:10px 12px;max-height:300px;overflow:hidden;transition:max-height .25s ease}
+        .context-content.collapsed{max-height:0;padding:0 12px}
+        .context-section{margin-bottom:10px}.context-label{font-size:11px;font-weight:700;color:#b9bbca;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
+        .context-badges{display:flex;gap:8px;flex-wrap:wrap}.badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:600}.badge-active{background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:white}
+        .context-toggles{display:flex;flex-direction:column;gap:8px}.toggle-item{display:flex;align-items:center;gap:12px;padding:8px 10px;background:#40414f;border-radius:8px;cursor:pointer}.toggle-item input[type="checkbox"]{width:18px;height:18px;cursor:pointer}.toggle-label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#ececf1}
+        .context-summary{margin-top:8px;padding:8px;background:#667eea10;border-left:3px solid #667eea;border-radius:6px}.summary-text{font-size:12px;color:#b4b4c4;font-weight:600}
+
+        .messages-container{flex:1;overflow-y:auto;padding:12px 20px}
+        .message-wrapper{position:relative;padding-bottom:10px;margin-bottom:10px}
+        .message-wrapper::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:92%;height:1px;background:linear-gradient(to right,transparent,#444654 50%,transparent)}
+        .message-wrapper:last-child::after{display:none}
+        .message{max-width:900px;margin:0 auto}
+        .message-header{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+        .avatar{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px}
+        .user-avatar{background:#5436da}.assistant-avatar{background:#19c37d}
+        .message-content{padding-left:44px;line-height:1.55;white-space:pre-wrap;font-size:14px;color:#e8e8ea}
+
+        .clarification{padding:12px;background:#40414f;border-radius:8px;margin-top:10px}
+        .clarification-title{font-weight:700;margin-bottom:8px;font-size:14px;color:#fff}
+
+        .options-list{display:flex;flex-direction:column;gap:8px;max-height:420px;overflow-y:auto;margin-top:8px;width:100%}
+        .option-box{padding:10px 12px;background:#565869;border:2px solid #686b79;border-radius:8px;cursor:pointer;transition:all .12s;font-size:14px;line-height:1.3;user-select:none;width:100%}
+        .option-box:hover{transform:translateY(-2px);border-color:#19c37d;background:#5f636a}
+        .option-box.selected{background:linear-gradient(90deg,#163c2b 0%,#1a6b4c 100%);border-color:#19c37d;box-shadow:0 6px 18px rgba(25,195,125,.12);color:#fff}
+
+        .multi-select-info{padding:8px;background:#2f3238;border-radius:8px;margin-top:10px;display:none}
+        .selected-items{display:flex;flex-wrap:wrap;gap:6px}.selected-item{padding:6px 8px;background:#19c37d;color:#fff;border-radius:6px;font-size:12px;display:flex;gap:6px;align-items:center}
+
+        .search-box-container{margin-top:8px;padding:8px;background:#34363c;border-radius:8px}.search-box-label{font-size:13px;color:#ececf1;margin-bottom:8px}.search-input-wrapper{display:flex;gap:8px}.search-input{flex:1;padding:8px 12px;background:#40414f;border:1px solid #686b79;border-radius:6px;color:#ececf1;font-size:13px}.search-btn{padding:8px 12px;border-radius:6px;background:#19c37d;border:none;color:#fff;cursor:pointer;font-weight:700}
+
+        .selection-actions{display:flex;gap:8px;margin-top:10px;justify-content:flex-end;align-items:center}
+        .confirm-btn{padding:8px 12px;border-radius:8px;border:none;color:#fff;background:#2f3338;cursor:pointer;font-weight:700;font-size:13px}
+        .confirm-btn:disabled{opacity:.45;cursor:not-allowed}
+        .confirm-btn.highlight{background:linear-gradient(90deg,#667eea,#19c37d);box-shadow:0 8px 28px rgba(25,195,125,.12);transform:translateY(-1px);opacity:1 !important}
+        .confirm-btn.highlight:disabled{opacity:1 !important}
+        .clear-btn{padding:8px 10px;border-radius:8px;background:#565869;border:none;color:#ececf1;cursor:pointer;font-weight:600;font-size:13px}
+
+        .sql-code{background:#2d2d2d;color:#f8f8f2;padding:12px;border-radius:8px;margin-top:8px;overflow-x:auto;font-family:monospace;font-size:13px}
+        .table-header{display:flex;justify-content:space-between;align-items:center;padding:8px;background:#f8f9fa;border-bottom:1px solid #dee2e6}
+        .data-table-wrapper{margin-top:10px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+        .table-scroll{overflow:auto;max-height:340px}.data-table{width:100%;border-collapse:collapse;font-size:13px}
+        .data-table thead th{text-align:left;padding:8px 10px;font-weight:700;color:#666;background:transparent;position:sticky;top:0}
+        .data-table td{padding:8px 10px;color:#333;border-top:1px solid rgba(0,0,0,.05)}
+
+        .input-container{padding:12px 16px;background:#343541;border-top:1px solid #444654}
+        .input-wrapper{max-width:900px;margin:0 auto;position:relative}
+        .input-box{width:100%;padding:10px 44px 10px 12px;background:#40414f;border:1px solid #565869;border-radius:10px;color:#ececf1;font-size:14px;resize:none}
+        .send-btn{position:absolute;right:10px;bottom:8px;width:36px;height:36px;background:#19c37d;border:none;border-radius:8px;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+
+        ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:#202123}::-webkit-scrollbar-thumb{background:#565869;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#686b79}
+        @media(max-width:768px){.sidebar{display:none}.message{max-width:100%;padding:0 8px}}
     </style>
 </head>
 <body>
     <div class="chat-container">
-        <!-- Sidebar -->
         <div class="sidebar">
-            <div class="sidebar-header">
-                <button class="new-chat-btn" onclick="startNewChat()">
-                    + New Chat
-                </button>
-            </div>
-
-            <div class="module-info">
-                <div class="module-name">📊 {{ module.name }}</div>
-                <div>{{ module.tables|length }} tables</div>
-            </div>
-
-            <div class="conversations-list" id="conversationsList">
-                <div class="empty-state">No conversations yet</div>
-            </div>
-
-            <div class="sidebar-footer">
-                <a href="{% url 'dashboard' %}" class="back-btn">← Back to Dashboard</a>
-            </div>
+            <div class="sidebar-header"><button class="new-chat-btn" onclick="startNewChat()">+ New Chat</button></div>
+            <div class="module-info"><div class="module-name">📊 {{ module.name }}</div><div>{{ module.tables|length }} tables</div></div>
+            <div class="conversations-list" id="conversationsList"><div class="empty-state">No conversations yet</div></div>
+            <div class="sidebar-footer"><a href="{% url 'dashboard' %}" class="back-btn">← Back to Dashboard</a></div>
         </div>
 
-        <!-- Main Chat -->
         <div class="main-chat">
             <div class="chat-header">
                 <h2 id="chatTitle">New Chat</h2>
+                <!-- Header status (shows active toggles) -->
+                <div class="header-status" id="headerContextStatus" aria-live="polite">
+                    <!-- badges updated by JS -->
+                </div>
+            </div>
+
+            <!-- Context Settings Panel -->
+            <div class="context-settings-panel">
+                <div class="context-header" onclick="toggleContextPanel()">
+                    <span class="context-title">📊 Context Settings</span>
+                    <button class="toggle-panel-btn"><span id="panelToggleIcon">▼</span></button>
+                </div>
+
+                <div class="context-content" id="contextContent">
+                    <div class="context-section">
+                        <div class="context-label">Always Active:</div>
+                        <div class="context-badges">
+                            <span class="badge badge-active">
+                                <span class="badge-icon">📚</span>
+                                Knowledge Graph
+                            </span>
+                            <span class="badge badge-active">
+                                <span class="badge-icon">🔗</span>
+                                Relationships
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="context-section">
+                        <div class="context-label">Optional Context:</div>
+                        <div class="context-toggles">
+                            <label class="toggle-item">
+                                <input type="checkbox" id="useRCA" checked onchange="updateContextSettings()">
+                                <span class="toggle-label">
+                                    <span class="toggle-icon">📊</span>
+                                    RCA (Root Cause Analysis)
+                                </span>
+                            </label>
+
+                            <label class="toggle-item">
+                                <input type="checkbox" id="useExtraSuggestions" checked onchange="updateContextSettings()">
+                                <span class="toggle-label">
+                                    <span class="toggle-icon">💡</span>
+                                    Extra Suggestions
+                                </span>
+                            </label>
+
+                            <label class="toggle-item">
+                                <input type="checkbox" id="usePOS" onchange="updateContextSettings()">
+                                <span class="toggle-label">
+                                    <span class="toggle-icon">📝</span>
+                                    POS Tagging
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="context-summary">
+                        <span class="summary-text" id="contextSummary">
+                            Using: Knowledge Graph, Relationships, RCA, Extra Suggestions
+                        </span>
+                    </div>
+                </div>
             </div>
 
             <div class="messages-container" id="messagesContainer">
@@ -579,8 +176,7 @@
                             <strong>Assistant</strong>
                         </div>
                         <div class="message-content">
-                            Hi! I'm your assistant for <strong>{{ module.name }}</strong>. 
-                            I can help you query and analyze data. What would you like to know?
+                            Hi! I'm your assistant for <strong>{{ module.name }}</strong>. I can help you query and analyze data. What would you like to know?
                         </div>
                     </div>
                 </div>
@@ -588,555 +184,370 @@
 
             <div class="input-container">
                 <div class="input-wrapper">
-                    <textarea 
-                        id="messageInput" 
-                        class="input-box" 
-                        placeholder="Send a message..."
-                        rows="1"
-                        onkeydown="handleKeyPress(event)"></textarea>
+                    <textarea id="messageInput" class="input-box" placeholder="Send a message..." rows="1" onkeydown="handleKeyPress(event)"></textarea>
                     <button class="send-btn" id="sendBtn" onclick="sendMessage()">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                            <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"/>
-                        </svg>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"/></svg>
                     </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <script>
-        const MODULE_ID = {{ module.id }};
-        let currentConversationId = null;
-        let pendingClarification = null;
-        let sessionData = null;
+<script>
+    const MODULE_ID = {{ module.id }};
+    let currentConversationId = null;
+    let pendingClarification = null;
+    let sessionData = null;
+    let selectedItems = new Set();
+    let currentClarificationContainer = null;
 
-        document.getElementById('messageInput').addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = (this.scrollHeight) + 'px';
+    function toggleContextPanel(){
+        const content = document.getElementById('contextContent');
+        const icon = document.getElementById('panelToggleIcon');
+        if(!content||!icon) return;
+        content.classList.toggle('collapsed');
+        icon.textContent = content.classList.contains('collapsed') ? '▶' : '▼';
+    }
+
+    // Update both summary inside panel and the compact header status badges
+    function updateContextSettings(){
+        const useRCA = document.getElementById('useRCA') ? document.getElementById('useRCA').checked : true;
+        const useExtraSuggestions = document.getElementById('useExtraSuggestions') ? document.getElementById('useExtraSuggestions').checked : true;
+        const usePOS = document.getElementById('usePOS') ? document.getElementById('usePOS').checked : false;
+
+        const activeContexts = ['Knowledge Graph', 'Relationships'];
+        if (useRCA) activeContexts.push('RCA');
+        if (useExtraSuggestions) activeContexts.push('Extra Suggestions');
+        if (usePOS) activeContexts.push('POS Tagging');
+
+        const summary = 'Using: ' + activeContexts.join(', ');
+        const el = document.getElementById('contextSummary');
+        if (el) el.textContent = summary;
+
+        // Update the header status badges
+        renderHeaderStatus({ useRCA, useExtraSuggestions, usePOS });
+    }
+
+    function getContextSettings(){
+        return {
+            use_kg: true,
+            use_relationships: true,
+            use_rca: document.getElementById('useRCA') ? document.getElementById('useRCA').checked : true,
+            use_extra_suggestions: document.getElementById('useExtraSuggestions') ? document.getElementById('useExtraSuggestions').checked : true,
+            use_pos: document.getElementById('usePOS') ? document.getElementById('usePOS').checked : false
+        };
+    }
+
+    // Renders the compact header badges reflecting current toggles
+    function renderHeaderStatus(flags){
+        const container = document.getElementById('headerContextStatus');
+        if(!container) return;
+        // Always show KG and Relationships as on
+        const kgBadge = `<span class="status-badge status-on" title="Knowledge Graph">KG: On</span>`;
+        const relBadge = `<span class="status-badge status-on" title="Relationships">Rel: On</span>`;
+
+        const rca = flags.useRCA ? `<span class="status-badge status-on" title="RCA enabled">RCA: On</span>` : `<span class="status-badge status-off" title="RCA disabled">RCA: Off</span>`;
+        const extra = flags.useExtraSuggestions ? `<span class="status-badge status-on" title="Extra Suggestions enabled">Extra: On</span>` : `<span class="status-badge status-off" title="Extra: Off">Extra: Off</span>`;
+        const pos = flags.usePOS ? `<span class="status-badge status-on" title="POS enabled">POS: On</span>` : `<span class="status-badge status-off" title="POS disabled">POS: Off</span>`;
+
+        container.innerHTML = `${kgBadge}${relBadge}${rca}${extra}${pos}`;
+    }
+
+    // initialize header badges on load
+    document.addEventListener('DOMContentLoaded', () => {
+        updateContextSettings();
+    });
+
+    // Input autosize + send
+    document.getElementById('messageInput').addEventListener('input', function(){ this.style.height='auto'; this.style.height = (this.scrollHeight) + 'px'; });
+    function handleKeyPress(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } }
+
+    function startNewChat(){
+        currentConversationId = null; pendingClarification = null; sessionData = null; selectedItems.clear();
+        document.getElementById('messagesContainer').innerHTML = `<div class="message-wrapper"><div class="message assistant-message"><div class="message-header"><div class="avatar assistant-avatar">🤖</div><strong>Assistant</strong></div><div class="message-content">Hi! I'm your assistant for <strong>{{ module.name }}</strong>. What would you like to know?</div></div></div>`;
+        document.getElementById('chatTitle').textContent = 'New Chat';
+        document.getElementById('messageInput').value = '';
+        document.getElementById('messageInput').focus();
+    }
+
+    async function sendMessage(){
+        const input = document.getElementById('messageInput'); const message = input.value.trim();
+        if(!message) return;
+        input.disabled = true; document.getElementById('sendBtn').disabled = true;
+        appendMessage('user', message); input.value=''; input.style.height='auto';
+        try{
+            const ctx = getContextSettings();
+            const resp = await fetch('/chat/api/', { method:'POST', headers:{ 'Content-Type':'application/json','X-CSRFToken': getCookie('csrftoken') }, body: JSON.stringify({ message, conversation_id: currentConversationId, module_id: MODULE_ID, session_data: sessionData, feedback: null, context_settings: ctx })});
+            if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json(); handleResponse(data);
+        }catch(err){ console.error(err); appendMessage('assistant','❌ Sorry, something went wrong.'); }
+        finally{ input.disabled=false; document.getElementById('sendBtn').disabled=false; input.focus(); }
+    }
+
+    function handleResponse(data){
+        if(data.conversation_id) currentConversationId = data.conversation_id;
+        if(data.session_data) sessionData = data.session_data;
+        if(data.type === 'clarification') handleClarification(data);
+        else if(data.type === 'response'){ appendMessage('assistant', data.message); if(data.sql) appendSQL(data.sql); if(data.data && data.data.length) renderTable(data.data); }
+        else if(data.type === 'error') appendMessage('assistant','❌ ' + data.message);
+        loadConversations();
+    }
+
+    // Clarification (scoped)
+    function handleClarification(data){
+        selectedItems = new Set();
+        pendingClarification = {
+            subtype: data.subtype,
+            entity: data.entity,
+            entity_type: data.entity_type,
+            clarification_context: data.clarification_context,
+            allow_custom: data.allow_custom || false
+        };
+        window.currentOptions = Array.isArray(data.options) ? data.options : [];
+        window.isMultiSelect = true;
+        const isValueSelection = data.subtype === 'value_selection';
+
+        let html = `<div class="clarification">`;
+        html += `<div class="clarification-title">${escapeHtml(data.message)}</div>`;
+        html += `<div class="multi-select-info" style="display:none;"><div class="selected-items"></div></div>`;
+        html += `<div class="options-list">`;
+        if(!Array.isArray(data.options) || data.options.length === 0){
+            html += `<div style="padding:12px;color:#ff6b6b">No options available</div>`;
+        } else {
+            data.options.forEach((option, idx) => {
+                html += `<div class="option-box" data-index="${idx}">${escapeHtml(String(option))}</div>`;
+            });
+        }
+        html += `</div>`;
+
+        if(data.allow_custom && isValueSelection){
+            html += `<div class="search-box-container"><div class="search-box-label">🔍 Or search for a specific value:</div><div class="search-input-wrapper"><input type="text" class="search-input" placeholder="Type to search..."><button class="search-btn">Search</button></div></div>`;
+        }
+
+        html += `<div class="selection-actions"><button class="confirm-btn" disabled>Confirm Selection (0 selected)</button><button class="clear-btn">Clear All</button></div>`;
+        html += `</div>`;
+
+        appendRawHTML(html);
+        const container = document.querySelector('#messagesContainer .message-wrapper:last-child .message .message-content .clarification');
+        if(container){
+            currentClarificationContainer = container;
+            attachScopedHandlers(container);
+        } else {
+            attachScopedHandlers();
+        }
+    }
+
+    function attachScopedHandlers(container){
+        const root = container || currentClarificationContainer || document.querySelector('#messagesContainer .message-wrapper:last-child .message .message-content');
+        if(!root) return;
+        selectedItems = new Set();
+
+        const boxes = Array.from(root.querySelectorAll('.option-box'));
+        boxes.forEach(box => {
+            box.onclick = null;
+            box.addEventListener('click', function(){
+                const idx = Number(this.dataset.index);
+                if(Number.isNaN(idx)) return;
+                if(selectedItems.has(idx)){ selectedItems.delete(idx); this.classList.remove('selected'); }
+                else { selectedItems.add(idx); this.classList.add('selected'); }
+                updateScopedSelectionDisplay(root);
+            });
         });
 
-        function handleKeyPress(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
-            }
-        }
-
-        function startNewChat() {
-            currentConversationId = null;
-            pendingClarification = null;
-            sessionData = null;
-            
-            document.getElementById('messagesContainer').innerHTML = `
-                <div class="message-wrapper">
-                    <div class="message assistant-message">
-                        <div class="message-header">
-                            <div class="avatar assistant-avatar">🤖</div>
-                            <strong>Assistant</strong>
-                        </div>
-                        <div class="message-content">
-                            Hi! I'm your assistant for <strong>{{ module.name }}</strong>. 
-                            What would you like to know?
-                        </div>
-                    </div>
-                </div>
-            `;
-            document.getElementById('chatTitle').textContent = 'New Chat';
-            document.getElementById('messageInput').value = '';
-            
-            document.querySelectorAll('.conversation-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            
-            document.getElementById('messageInput').focus();
-        }
-
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const message = input.value.trim();
-            
-            if (!message) return;
-
-            input.disabled = true;
-            document.getElementById('sendBtn').disabled = true;
-
-            appendMessage('user', message);
-            input.value = '';
-            input.style.height = 'auto';
-
-            try {
-                const response = await fetch('/chat/api/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify({
-                        message: message,
-                        conversation_id: currentConversationId,
-                        module_id: MODULE_ID,
-                        session_data: sessionData,
-                        feedback: null
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
-                const data = await response.json();
-                console.log('📥 Response:', data);
-                
-                handleResponse(data);
-
-            } catch (error) {
-                console.error('Error:', error);
-                appendMessage('assistant', '❌ Sorry, something went wrong.');
-            } finally {
-                input.disabled = false;
-                document.getElementById('sendBtn').disabled = false;
-                input.focus();
-            }
-        }
-
-        function handleResponse(data) {
-            if (data.conversation_id) {
-                currentConversationId = data.conversation_id;
-            }
-
-            if (data.session_data) {
-                sessionData = data.session_data;
-            }
-
-            if (data.type === 'clarification') {
-                handleClarification(data);
-            } else if (data.type === 'response') {
-                appendMessage('assistant', data.message);
-                
-                if (data.sql) {
-                    appendSQL(data.sql);
-                }
-                
-                if (data.data && data.data.length > 0) {
-                    renderTable(data.data);
-                }
-            } else if (data.type === 'error') {
-                appendMessage('assistant', '❌ ' + data.message);
-            }
-
-            loadConversations();
-        }
-
-        function handleClarification(data) {
-            console.log('🔔 Clarification:', data);
-            
-            pendingClarification = {
-                subtype: data.subtype,
-                entity: data.entity,
-                entity_type: data.entity_type,
-                clarification_context: data.clarification_context,
-                allow_custom: data.allow_custom || false
+        const searchBtn = root.querySelector('.search-btn');
+        if(searchBtn){
+            const input = root.querySelector('.search-input');
+            searchBtn.onclick = function(){
+                if(!input) return;
+                const val = input.value.trim();
+                if(!val){ alert('Please enter a search term'); return; }
+                input.disabled = true; searchBtn.disabled = true;
+                appendMessage('user', `Searching for: ${val}`);
+                const feedback = { type:'custom_value', custom_value: val, entity: pendingClarification?.entity, entity_type: pendingClarification?.entity_type, clarification_context: pendingClarification?.clarification_context };
+                fetch('/chat/api/', { method:'POST', headers:{ 'Content-Type':'application/json','X-CSRFToken': getCookie('csrftoken') }, body: JSON.stringify({ message:'', conversation_id: currentConversationId, module_id: MODULE_ID, session_data: sessionData, feedback }) })
+                    .then(resp=>resp.json()).then(data=>handleResponse(data)).catch(err=>{ console.error(err); appendMessage('assistant','❌ Search failed.'); input.disabled=false; searchBtn.disabled=false; });
             };
-            
-            let html = `<div class="clarification">
-                <div class="clarification-title">${escapeHtml(data.message)}</div>`;
-            
-            // Add search box if custom values are allowed
-            if (data.allow_custom && data.subtype === 'value_selection') {
-                html += `<div class="search-box-container">
-                    <div class="search-box-label">🔍 Or search for a specific value:</div>
-                    <div class="search-input-wrapper">
-                        <input type="text" class="search-input" id="customSearchInput" placeholder="Type to search...">
-                        <button class="search-btn" onclick="searchCustomValue()">Search</button>
-                    </div>
-                </div>`;
-            }
-            
-            html += `<div class="options-list">`;
-            
-            data.options.forEach((option, index) => {
-                const optionText = String(option);
-                const escapedText = escapeHtml(optionText);
-                html += `<button class="option-btn" onclick='selectOption(${index})'>${escapedText}</button>`;
-            });
-            
-            html += `</div></div>`;
-            
-            appendRawHTML(html);
-            
-            window.currentOptions = data.options;
         }
 
-        async function searchCustomValue() {
-            const input = document.getElementById('customSearchInput');
-            const customValue = input.value.trim();
-            
-            if (!customValue) {
-                alert('Please enter a search term');
-                return;
-            }
+        const confirmBtn = root.querySelector('.confirm-btn');
+        const clearBtn = root.querySelector('.clear-btn');
 
-            input.disabled = true;
-            document.querySelector('.search-btn').disabled = true;
-            document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
-
-            appendMessage('user', `Searching for: ${customValue}`);
-
-            const feedback = {
-                type: 'custom_value',
-                custom_value: customValue,
-                entity: pendingClarification.entity,
-                entity_type: pendingClarification.entity_type,
-                clarification_context: pendingClarification.clarification_context
+        if(clearBtn){
+            clearBtn.onclick = function(){
+                selectedItems.forEach(i => {
+                    const b = root.querySelector(`.option-box[data-index="${i}"]`);
+                    if(b) b.classList.remove('selected');
+                });
+                selectedItems.clear();
+                updateScopedSelectionDisplay(root);
             };
+        }
 
-            try {
-                const response = await fetch('/chat/api/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify({
-                        message: '',
-                        conversation_id: currentConversationId,
-                        module_id: MODULE_ID,
-                        session_data: sessionData,
-                        feedback: feedback
-                    })
-                });
+        if(confirmBtn){
+            confirmBtn.onclick = function(){ confirmScopedSelection(root); };
+        }
 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
-                const data = await response.json();
-                handleResponse(data);
-
-            } catch (error) {
-                console.error('Error:', error);
-                appendMessage('assistant', '❌ Search failed.');
-                input.disabled = false;
-                document.querySelector('.search-btn').disabled = false;
-                document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = false);
+        function handleEnterScoped(e){
+            if(e.key === 'Enter' && selectedItems.size > 0){
+                e.preventDefault();
+                confirmScopedSelection(root);
             }
         }
+        document.removeEventListener('keydown', handleEnterScoped);
+        document.addEventListener('keydown', handleEnterScoped);
 
-        async function selectOption(optionIndex) {
-            const selectedOption = window.currentOptions[optionIndex];
-            
-            document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
-            if (document.querySelector('.search-input')) {
-                document.querySelector('.search-input').disabled = true;
-                document.querySelector('.search-btn').disabled = true;
-            }
+        updateScopedSelectionDisplay(root);
+    }
 
-            appendMessage('user', selectedOption);
+    function updateScopedSelectionDisplay(root){
+        if(!root) root = currentClarificationContainer;
+        if(!root) return;
+        const display = root.querySelector('.selected-items');
+        const multiInfo = root.querySelector('.multi-select-info');
+        const confirmBtn = root.querySelector('.confirm-btn');
 
-            const feedback = {
-                type: pendingClarification.subtype,
-                selected_option: selectedOption,
-                entity: pendingClarification.entity,
-                entity_type: pendingClarification.entity_type,
-                clarification_context: pendingClarification.clarification_context
-            };
-
-            try {
-                const response = await fetch('/chat/api/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify({
-                        message: '',
-                        conversation_id: currentConversationId,
-                        module_id: MODULE_ID,
-                        session_data: sessionData,
-                        feedback: feedback
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
-                const data = await response.json();
-                handleResponse(data);
-                
-            } catch (error) {
-                console.error('Error:', error);
-                appendMessage('assistant', '❌ Error processing selection.');
-            }
-        }
-
-        function appendMessage(role, content) {
-            const container = document.getElementById('messagesContainer');
-            const isUser = role === 'user';
-            
-            const wrapperDiv = document.createElement('div');
-            wrapperDiv.className = 'message-wrapper';
-            
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
-            messageDiv.innerHTML = `
-                <div class="message-header">
-                    <div class="avatar ${isUser ? 'user-avatar' : 'assistant-avatar'}">
-                        ${isUser ? '👤' : '🤖'}
-                    </div>
-                    <strong>${isUser ? 'You' : 'Assistant'}</strong>
-                </div>
-                <div class="message-content">${escapeHtml(content)}</div>
-            `;
-            
-            wrapperDiv.appendChild(messageDiv);
-            container.appendChild(wrapperDiv);
-            container.scrollTop = container.scrollHeight;
-        }
-
-        function appendSQL(sql) {
-            const container = document.getElementById('messagesContainer');
-            const lastWrapper = container.querySelector('.message-wrapper:last-child');
-            
-            if (lastWrapper) {
-                const sqlDiv = document.createElement('div');
-                sqlDiv.innerHTML = `
-                    <div class="sql-code">
-                        <div class="sql-header">
-                            <span class="sql-title">SQL Query</span>
-                            <button class="copy-sql-btn" onclick="copySQL(this)">Copy</button>
-                        </div>
-                        <pre>${escapeHtml(sql)}</pre>
-                    </div>
-                `;
-                lastWrapper.querySelector('.message').appendChild(sqlDiv);
-                container.scrollTop = container.scrollHeight;
-            }
-        }
-
-        function copySQL(button) {
-            const sqlCode = button.closest('.sql-code').querySelector('pre').textContent;
-            navigator.clipboard.writeText(sqlCode).then(() => {
-                const originalText = button.textContent;
-                button.textContent = 'Copied!';
-                setTimeout(() => {
-                    button.textContent = originalText;
-                }, 2000);
-            });
-        }
-
-        function renderTable(data) {
-            if (!data || data.length === 0) return;
-            
-            const container = document.getElementById('messagesContainer');
-            const lastWrapper = container.querySelector('.message-wrapper:last-child');
-            
-            if (!lastWrapper) return;
-            
-            const columns = Object.keys(data[0]);
-            
-            let html = `
-                <div class="data-table-wrapper">
-                    <div class="table-header">
-                        <span class="table-title">Results (${data.length} rows)</span>
-                        <button class="export-csv-btn" onclick="exportToCSV(this)">Export CSV</button>
-                    </div>
-                    <div class="table-scroll">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-            `;
-            
-            columns.forEach(col => {
-                html += `<th>${escapeHtml(col)}</th>`;
-            });
-            
-            html += '</tr></thead><tbody>';
-            
-            data.forEach(row => {
-                html += '<tr>';
-                columns.forEach(col => {
-                    const value = row[col];
-                    let displayValue = value;
-                    
-                    if (value === null || value === undefined) {
-                        displayValue = '-';
-                    } else if (typeof value === 'number') {
-                        displayValue = value.toLocaleString();
-                    }
-                    
-                    html += `<td>${escapeHtml(String(displayValue))}</td>`;
-                });
-                html += '</tr>';
-            });
-            
-            html += '</tbody></table></div></div>';
-            
-            const tableDiv = document.createElement('div');
-            tableDiv.innerHTML = html;
-            lastWrapper.querySelector('.message').appendChild(tableDiv);
-            container.scrollTop = container.scrollHeight;
-        }
-
-        function exportToCSV(button) {
-            const table = button.closest('.data-table-wrapper').querySelector('table');
-            let csv = [];
-            
-            const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent);
-            csv.push(headers.join(','));
-            
-            table.querySelectorAll('tbody tr').forEach(row => {
-                const cells = Array.from(row.querySelectorAll('td')).map(td => {
-                    let value = td.textContent;
-                    if (value.includes(',')) {
-                        value = `"${value}"`;
-                    }
-                    return value;
-                });
-                csv.push(cells.join(','));
-            });
-            
-            const csvContent = csv.join('\n');
-            const blob = new Blob([csvContent], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'results.csv';
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        function appendRawHTML(html) {
-            const container = document.getElementById('messagesContainer');
-            const wrapperDiv = document.createElement('div');
-            wrapperDiv.className = 'message-wrapper';
-            
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'message assistant-message';
-            messageDiv.innerHTML = `
-                <div class="message-header">
-                    <div class="avatar assistant-avatar">🤖</div>
-                    <strong>Assistant</strong>
-                </div>
-                <div class="message-content">${html}</div>
-            `;
-            
-            wrapperDiv.appendChild(messageDiv);
-            container.appendChild(wrapperDiv);
-            container.scrollTop = container.scrollHeight;
-        }
-
-        async function loadConversations() {
-            try {
-                const response = await fetch(`/conversations/?module_id=${MODULE_ID}`);
-                
-                if (!response.ok) return;
-                
-                const data = await response.json();
-                const list = document.getElementById('conversationsList');
-                
-                if (!data.conversations || data.conversations.length === 0) {
-                    list.innerHTML = '<div class="empty-state">No conversations yet</div>';
-                    return;
-                }
-                
-                list.innerHTML = data.conversations.map(conv => `
-                    <div class="conversation-item ${conv.id === currentConversationId ? 'active' : ''}"
-                         onclick="loadConversation(${conv.id})">
-                        ${escapeHtml(conv.title)}
-                        <button class="delete-conv-btn" onclick="event.stopPropagation(); deleteConversation(${conv.id})" title="Delete">
-                            🗑️
-                        </button>
-                    </div>
-                `).join('');
-                
-            } catch (error) {
-                console.error('Error loading conversations:', error);
-            }
-        }
-
-        async function loadConversation(id) {
-            try {
-                const response = await fetch(`/conversation/${id}/`);
-                
-                if (!response.ok) return;
-                
-                const data = await response.json();
-                
-                currentConversationId = id;
-                document.getElementById('messagesContainer').innerHTML = '';
-                document.getElementById('chatTitle').textContent = data.conversation.title;
-                
-                document.querySelectorAll('.conversation-item').forEach(item => {
-                    item.classList.remove('active');
-                });
-                const activeItem = document.querySelector(`[onclick="loadConversation(${id})"]`);
-                if (activeItem) {
-                    activeItem.classList.add('active');
-                }
-                
-                data.messages.forEach(msg => {
-                    appendMessage(msg.is_user ? 'user' : 'assistant', msg.content);
-                    
-                    if (!msg.is_user && msg.metadata) {
-                        if (msg.metadata.sql) appendSQL(msg.metadata.sql);
-                        if (msg.metadata.data) renderTable(msg.metadata.data);
-                    }
-                });
-                
-            } catch (error) {
-                console.error('Error loading conversation:', error);
-            }
-        }
-
-        async function deleteConversation(id) {
-            if (!confirm('Delete this conversation?')) return;
-
-            try {
-                const response = await fetch(`/conversation/${id}/delete/`, {
-                    method: 'DELETE',
-                    headers: {
-                        'X-CSRFToken': getCookie('csrftoken')
-                    }
-                });
-
-                if (!response.ok) return;
-
-                if (id === currentConversationId) {
-                    startNewChat();
-                }
-
-                loadConversations();
-
-            } catch (error) {
-                console.error('Error deleting conversation:', error);
-            }
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function getCookie(name) {
-            let cookieValue = null;
-            if (document.cookie) {
-                const cookies = document.cookie.split(';');
-                for (let cookie of cookies) {
-                    cookie = cookie.trim();
-                    if (cookie.startsWith(name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
-                }
-            }
-            return cookieValue;
-        }
-
-        window.addEventListener('DOMContentLoaded', function() {
-            loadConversations();
+        if(display) display.innerHTML = '';
+        selectedItems.forEach(index => {
+            const option = window.currentOptions?.[index];
+            const tag = document.createElement('div');
+            tag.className = 'selected-item';
+            tag.innerHTML = `${escapeHtml(String(option).substring(0,40))}${String(option).length>40?'...':''} <span style="cursor:pointer;font-weight:700;margin-left:6px;" onclick="removeScopedSelection(${index})">×</span>`;
+            display && display.appendChild(tag);
         });
-    </script>
+
+        if(multiInfo) multiInfo.style.display = selectedItems.size > 0 ? 'block' : 'none';
+
+        const count = selectedItems.size;
+        if(confirmBtn){
+            confirmBtn.disabled = (count === 0);
+            confirmBtn.textContent = `Confirm Selection (${count} selected)`;
+            if(count > 0){
+                confirmBtn.classList.add('highlight');
+                confirmBtn.style.opacity = '1';
+                confirmBtn.disabled = false;
+            } else {
+                confirmBtn.classList.remove('highlight');
+                confirmBtn.style.opacity = '';
+                confirmBtn.disabled = true;
+            }
+        }
+    }
+
+    function removeScopedSelection(index){
+        selectedItems.delete(index);
+        if(currentClarificationContainer){
+            const box = currentClarificationContainer.querySelector(`.option-box[data-index="${index}"]`);
+            if(box) box.classList.remove('selected');
+            updateScopedSelectionDisplay(currentClarificationContainer);
+        } else {
+            updateScopedSelectionDisplay();
+        }
+    }
+
+    async function confirmScopedSelection(root){
+        if(!root) root = currentClarificationContainer;
+        if(!root) return;
+        if(selectedItems.size === 0) return;
+        root.querySelectorAll('.option-box').forEach(b => { b.style.pointerEvents='none'; b.style.opacity='0.6'; });
+        const confirmBtn = root.querySelector('.confirm-btn');
+        const clearBtn = root.querySelector('.clear-btn');
+        if(confirmBtn) confirmBtn.disabled = true;
+        if(clearBtn) clearBtn.disabled = true;
+
+        const selectedValues = Array.from(selectedItems).map(i => window.currentOptions[i]);
+        const selectionText = selectedValues.length > 3 ? `${selectedValues.slice(0,3).join(', ')}... (${selectedValues.length} items total)` : selectedValues.join(', ');
+        appendMessage('user', `Selected ${selectedValues.length} items: ${selectionText}`);
+
+        const feedback = {
+            type: pendingClarification?.subtype,
+            selected_option: selectedValues[0],
+            multiple_values: selectedValues,
+            entity: pendingClarification?.entity,
+            entity_type: pendingClarification?.entity_type,
+            clarification_context: pendingClarification?.clarification_context
+        };
+
+        try {
+            const resp = await fetch('/chat/api/', { method:'POST', headers:{ 'Content-Type':'application/json','X-CSRFToken': getCookie('csrftoken') }, body: JSON.stringify({ message:'', conversation_id: currentConversationId, module_id: MODULE_ID, session_data: sessionData, feedback, context_settings: getContextSettings() })});
+            if(!resp.ok) throw new Error(`HTTP ${resp.status}`); const data = await resp.json(); handleResponse(data);
+        } catch(err){ console.error(err); appendMessage('assistant','❌ Error processing selection.'); }
+    }
+
+    // fallback single-select (unchanged)
+    async function selectSingleOption(optionIndex){
+        const selectedOption = window.currentOptions[optionIndex];
+        document.querySelectorAll('.option-box').forEach(b => { b.style.pointerEvents='none'; b.style.opacity='0.6'; });
+        if(document.querySelector('.search-input')) { document.querySelector('.search-input').disabled = true; document.querySelector('.search-btn').disabled = true; }
+        appendMessage('user', selectedOption);
+        const feedback = { type: pendingClarification?.subtype, selected_option: selectedOption, entity: pendingClarification?.entity, entity_type: pendingClarification?.entity_type, clarification_context: pendingClarification?.clarification_context };
+        try {
+            const resp = await fetch('/chat/api/', { method:'POST', headers:{ 'Content-Type':'application/json','X-CSRFToken': getCookie('csrftoken') }, body: JSON.stringify({ message:'', conversation_id: currentConversationId, module_id: MODULE_ID, session_data: sessionData, feedback, context_settings: getContextSettings() })});
+            if(!resp.ok) throw new Error(`HTTP ${resp.status}`); const data = await resp.json(); handleResponse(data);
+        } catch(err){ console.error(err); appendMessage('assistant','❌ Error processing selection.'); }
+    }
+
+    // fallback search (unchanged)
+    async function searchCustomValue(){
+        const input = document.querySelector('.search-input');
+        const val = input ? input.value.trim() : '';
+        if(!val){ alert('Please enter a search term'); return; }
+        input.disabled = true; const sb = document.querySelector('.search-btn'); if(sb) sb.disabled = true;
+        document.querySelectorAll('.option-box').forEach(b => b.style.pointerEvents='none');
+        appendMessage('user', `Searching for: ${val}`);
+        const feedback = { type:'custom_value', custom_value: val, entity: pendingClarification?.entity, entity_type: pendingClarification?.entity_type, clarification_context: pendingClarification?.clarification_context };
+        try {
+            const resp = await fetch('/chat/api/', { method:'POST', headers:{ 'Content-Type':'application/json','X-CSRFToken': getCookie('csrftoken') }, body: JSON.stringify({ message:'', conversation_id: currentConversationId, module_id: MODULE_ID, session_data: sessionData, feedback })});
+            if(!resp.ok) throw new Error(`HTTP ${resp.status}`); const data = await resp.json(); handleResponse(data);
+        } catch(err){ console.error(err); appendMessage('assistant','❌ Search failed.'); if(input) input.disabled=false; if(sb) sb.disabled=false; }
+    }
+
+    // helpers
+    function appendMessage(role, content){
+        const container = document.getElementById('messagesContainer'); const isUser = role === 'user';
+        const wrapper = document.createElement('div'); wrapper.className = 'message-wrapper';
+        const msg = document.createElement('div'); msg.className = 'message ' + (isUser ? 'user-message' : 'assistant-message');
+        msg.innerHTML = `<div class="message-header"><div class="avatar ${isUser ? 'user-avatar' : 'assistant-avatar'}">${isUser ? '👤' : '🤖'}</div><strong>${isUser ? 'You' : 'Assistant'}</strong></div><div class="message-content">${escapeHtml(content)}</div>`;
+        wrapper.appendChild(msg); container.appendChild(wrapper); container.scrollTop = container.scrollHeight;
+    }
+
+    function appendSQL(sql){
+        const container = document.getElementById('messagesContainer'); const last = container.querySelector('.message-wrapper:last-child .message');
+        if(!last) return; const div = document.createElement('div'); div.className = 'sql-code'; div.innerHTML = `<div class="sql-header"><div class="sql-title">SQL Query</div><button class="copy-sql-btn" onclick="copySQL(this)">Copy</button></div><pre>${escapeHtml(sql)}</pre>`; last.appendChild(div); container.scrollTop = container.scrollHeight;
+    }
+    function copySQL(btn){ const t = btn.closest('.sql-code').querySelector('pre').textContent; navigator.clipboard.writeText(t).then(()=>{ const o=btn.textContent; btn.textContent='Copied!'; setTimeout(()=>btn.textContent=o,1500); }); }
+
+    function renderTable(data){
+        if(!data||!data.length) return; const container = document.getElementById('messagesContainer'); const last = container.querySelector('.message-wrapper:last-child .message'); if(!last) return;
+        const cols = Object.keys(data[0]); let html = `<div class="data-table-wrapper"><div class="table-header"><div class="table-title">Results (${data.length} rows)</div><button class="clear-btn" onclick="exportToCSV(this)">Export CSV</button></div><div class="table-scroll"><table class="data-table"><thead><tr>`;
+        cols.forEach(c=> html += `<th>${escapeHtml(c)}</th>`); html += `</tr></thead><tbody>`;
+        data.forEach(r=>{ html += '<tr>'; cols.forEach(c=>{ let v=r[c]; let d=v; if(v===null||v===undefined) d='-'; else if(typeof v==='number') d=v.toLocaleString(); html += `<td>${escapeHtml(String(d))}</td>`; }); html += '</tr>'; });
+        html += `</tbody></table></div></div>`; const div=document.createElement('div'); div.innerHTML=html; last.appendChild(div); container.scrollTop = container.scrollHeight;
+    }
+
+    function exportToCSV(btn){
+        const table = btn.closest('.data-table-wrapper').querySelector('table'); const headers = Array.from(table.querySelectorAll('thead th')).map(th=>th.textContent);
+        const rows = Array.from(table.querySelectorAll('tbody tr')).map(tr=>Array.from(tr.querySelectorAll('td')).map(td=>{ let v=td.textContent; if(v.includes(',')) v=`"${v}"`; return v; }).join(','));
+        const csv = [headers.join(','), ...rows].join('\n'); const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='results.csv'; a.click(); URL.revokeObjectURL(url);
+    }
+
+    function appendRawHTML(html){
+        const c = document.getElementById('messagesContainer'); const w=document.createElement('div'); w.className='message-wrapper'; const m=document.createElement('div'); m.className='message assistant-message'; m.innerHTML = `<div class="message-header"><div class="avatar assistant-avatar">🤖</div><strong>Assistant</strong></div><div class="message-content">${html}</div>`; w.appendChild(m); c.appendChild(w); c.scrollTop = c.scrollHeight;
+    }
+
+    async function loadConversations(){
+        try { const resp = await fetch(`/conversations/?module_id=${MODULE_ID}`); if(!resp.ok) return; const data = await resp.json(); const list = document.getElementById('conversationsList'); if(!data.conversations||data.conversations.length===0){ list.innerHTML='<div class="empty-state">No conversations yet</div>'; return; } list.innerHTML = data.conversations.map(conv => `<div class="conversation-item ${conv.id===currentConversationId?'active':''}" onclick="loadConversation(${conv.id})">${escapeHtml(conv.title)}<button class="delete-conv-btn" onclick="event.stopPropagation(); deleteConversation(${conv.id})" title="Delete">🗑️</button></div>`).join(''); } catch(err){ console.error('Error loading conversations',err); }
+    }
+
+    async function loadConversation(id){
+        try { const resp = await fetch(`/conversation/${id}/`); if(!resp.ok) return; const data = await resp.json(); currentConversationId = id; document.getElementById('messagesContainer').innerHTML=''; document.getElementById('chatTitle').textContent = data.conversation.title; data.messages.forEach(msg => { appendMessage(msg.is_user ? 'user' : 'assistant', msg.content); if(!msg.is_user && msg.metadata){ if(msg.metadata.sql) appendSQL(msg.metadata.sql); if(msg.metadata.data) renderTable(msg.metadata.data); } }); loadConversations(); } catch(err){ console.error('Error loading convo',err); }
+    }
+
+    async function deleteConversation(id){ if(!confirm('Delete this conversation?')) return; try { const resp = await fetch(`/conversation/${id}/delete/`, { method:'DELETE', headers:{ 'X-CSRFToken': getCookie('csrftoken') } }); if(!resp.ok) return; if(id === currentConversationId) startNewChat(); loadConversations(); } catch(err){ console.error('Delete error',err); } }
+
+    function escapeHtml(text){ const d=document.createElement('div'); d.textContent = text; return d.innerHTML; }
+    function getCookie(name){ let cookieValue=null; if(document.cookie){ document.cookie.split(';').forEach(c=>{ const t=c.trim(); if(t.startsWith(name+'=')) cookieValue=decodeURIComponent(t.substring(name.length+1)); }); } return cookieValue; }
+
+    window.addEventListener('DOMContentLoaded', () => { loadConversations(); });
+</script>
 </body>
 </html>

@@ -1,1427 +1,858 @@
-<!-- IMPROVED edit_module.html with Expand/Collapse + Sticky Save Button -->
-<!-- Replace the entire file or merge these changes -->
-
 {% load dict_filters %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit Module: {{ module.name }}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        @keyframes gradient {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-
-        body {
-            font-family: 'Poppins', sans-serif;
-            min-height: 100vh;
-            background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #f5576c);
-            background-size: 400% 400%;
-            animation: gradient 15s ease infinite;
-            padding: 40px 20px 120px 20px; /* Extra bottom padding for sticky button */
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            margin-bottom: 100px; /* Space for sticky button */
-        }
-
-        h1 {
-            color: #667eea;
-            margin-bottom: 10px;
-            font-size: 2em;
-        }
-
-        .subtitle {
-            color: #666;
-            margin-bottom: 30px;
-        }
-
-        .section {
-            margin-bottom: 40px;
-            padding: 30px;
-            background: #f8f9fa;
-            border-radius: 15px;
-        }
-
-        .section-title {
-            color: #667eea;
-            font-size: 1.5em;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .section-title:hover {
-            color: #5568d3;
-        }
-
-        .collapse-icon {
-            font-size: 0.8em;
-            transition: transform 0.3s ease;
-        }
-
-        .collapse-icon.collapsed {
-            transform: rotate(-90deg);
-        }
-
-        .section-content {
-            max-height: 5000px;
-            overflow: hidden;
-            transition: max-height 0.3s ease, opacity 0.3s ease;
-            opacity: 1;
-        }
-
-        .section-content.collapsed {
-            max-height: 0;
-            opacity: 0;
-        }
-
-        /* STICKY SAVE BUTTON */
-        .sticky-save-bar {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.95) 20%, rgba(255,255,255,1) 100%);
-            padding: 20px;
-            z-index: 1000;
-            border-top: 2px solid #e0e0e0;
-            backdrop-filter: blur(10px);
-        }
-
-        .sticky-save-content {
-            max-width: 1400px;
-            margin: 0 auto;
-            display: flex;
-            gap: 15px;
-            justify-content: flex-end;
-            align-items: center;
-        }
-
-        .btn {
-            padding: 12px 25px;
-            border: none;
-            border-radius: 10px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 1em;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #38ef7d 0%, #11998e 100%);
-            color: white;
-        }
-
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        /* TABLE SELECTION - COLLAPSIBLE */
-        .table-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .table-item {
-            background: white;
-            border-radius: 10px;
-            border: 2px solid #e0e0e0;
-            transition: all 0.3s ease;
-            overflow: hidden;
-        }
-
-        .table-item:hover {
-            border-color: #667eea;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
-        }
-
-        .table-header {
-            padding: 15px;
-            cursor: pointer;
-            user-select: none;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-        }
-
-        .table-header:hover {
-            background: linear-gradient(135deg, #e8e9fa 0%, #f0f1ff 100%);
-        }
-
-        .table-header input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-        }
-
-        .table-name {
-            flex: 1;
-            font-weight: 600;
-            color: #333;
-        }
-
-        .table-expand-icon {
-            font-size: 1.2em;
-            color: #667eea;
-            transition: transform 0.3s ease;
-        }
-
-        .table-expand-icon.collapsed {
-            transform: rotate(-90deg);
-        }
-
-        .columns-container {
-            max-height: 400px;
-            overflow-y: auto;
-            padding: 0;
-            transition: max-height 0.3s ease, padding 0.3s ease;
-        }
-
-        .columns-container:not(.show) {
-            max-height: 0;
-            overflow: hidden;
-        }
-
-        .columns-container.show {
-            padding: 10px 15px 15px 15px;
-            border-top: 1px solid #e0e0e0;
-        }
-
-        .column-item {
-            padding: 8px 10px;
-            font-size: 0.9em;
-            color: #555;
-            transition: background 0.2s ease;
-            border-radius: 5px;
-        }
-
-        .column-item:hover {
-            background: #f0f4ff;
-        }
-
-        .column-item label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-        }
-
-        .column-item input[type="checkbox"] {
-            width: 16px;
-            height: 16px;
-        }
-
-        /* KNOWLEDGE GRAPH - COLLAPSIBLE TABLES */
-        .kg-table-section {
-            margin-bottom: 30px;
-            background: white;
-            border-radius: 10px;
-            overflow: hidden;
-            border: 2px solid #e0e0e0;
-        }
-
-        .kg-table-header {
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            cursor: pointer;
-            user-select: none;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .kg-table-header:hover {
-            background: linear-gradient(135deg, #5568d3 0%, #653b8d 100%);
-        }
-
-        .kg-table-header h3 {
-            flex: 1;
-            margin: 0;
-            font-size: 1.3em;
-        }
-
-        .kg-expand-icon {
-            font-size: 1.5em;
-            transition: transform 0.3s ease;
-        }
-
-        .kg-expand-icon.collapsed {
-            transform: rotate(-90deg);
-        }
-
-        .kg-table-content {
-            max-height: 2000px;
-            overflow: hidden;
-            transition: max-height 0.3s ease, opacity 0.3s ease;
-            opacity: 1;
-        }
-
-        .kg-table-content.collapsed {
-            max-height: 0;
-            opacity: 0;
-        }
-
-        .kg-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .kg-table th {
-            background: #667eea;
-            color: white;
-            padding: 15px;
-            text-align: left;
-            font-weight: 600;
-        }
-
-        .kg-table td {
-            padding: 12px 15px;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .kg-table tr:hover {
-            background: #f8f9fa;
-        }
-
-        .kg-table input[type="text"],
-        .kg-table textarea {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-family: inherit;
-            transition: border-color 0.3s ease;
-        }
-
-        .kg-table input[type="text"]:focus,
-        .kg-table textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .kg-table textarea {
-            min-height: 60px;
-            resize: vertical;
-        }
-
-        .table-info-box {
-            background: #fff8dc;
-            border: 2px solid #ffd700;
-            border-radius: 10px;
-            padding: 15px;
-            margin: 20px;
-        }
-
-        .table-info-label {
-            font-weight: 600;
-            color: #d4a017;
-            margin-bottom: 8px;
-            display: block;
-        }
-
-        .table-info-textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #ffd700;
-            border-radius: 8px;
-            font-family: inherit;
-            min-height: 80px;
-            resize: vertical;
-            background: white;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 20px;
-            color: #667eea;
-        }
-
-        .loading.show {
-            display: block;
-        }
-
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .alert {
-            padding: 15px 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            display: none;
-        }
-
-        .alert.show {
-            display: block;
-        }
-
-        .alert-success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .alert-error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
-        .button-group {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-
-        .info-box {
-            background: #e3f2fd;
-            border-left: 4px solid #2196f3;
-            padding: 15px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-        }
-
-        /* Expand/Collapse All Buttons */
-        .expand-collapse-controls {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        .expand-collapse-btn {
-            padding: 8px 15px;
-            background: transparent;
-            border: 1px solid #667eea;
-            color: #667eea;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: all 0.3s ease;
-        }
-
-        .expand-collapse-btn:hover {
-            background: #667eea;
-            color: white;
-        }
-
-        /* Scrollbar styling */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 10px;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #667eea;
-            border-radius: 10px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #5568d3;
-        }
-
-        /* Relationship items */
-        .relationship-item {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            border: 2px solid #e0e0e0;
-            transition: all 0.3s ease;
-        }
-
-        .relationship-item:hover {
-            border-color: #667eea;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
-        }
-
-        .relationship-grid {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            gap: 20px;
-            align-items: start;
-        }
-
-        .relationship-side {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .relationship-center {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            min-width: 150px;
-            padding-top: 20px;
-        }
-
-        .rel-select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-family: inherit;
-            font-size: 0.95em;
-            background: white;
-            transition: all 0.3s ease;
-        }
-
-        .rel-select:focus {
-            border-color: #667eea;
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .rel-type-select {
-            padding: 10px 15px;
-            border: 2px solid #667eea;
-            border-radius: 8px;
-            font-family: inherit;
-            font-weight: 600;
-            color: #667eea;
-            background: white;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .rel-type-select:hover {
-            background: #f0f4ff;
-        }
-
-        .rel-arrow {
-            text-align: center;
-            margin-top: 10px;
-            font-size: 1.8em;
-            color: #667eea;
-        }
-
-        .dynamic-list {
-            margin-top: 20px;
-        }
-
-        .dynamic-item {
-            background: white;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 15px;
-            border: 1px solid #e0e0e0;
-        }
-
-        .dynamic-item input,
-        .dynamic-item textarea {
-            width: 100%;
-            padding: 8px;
-            margin-bottom: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-family: inherit;
-        }
-
-        .remove-btn {
-            background: #f5576c;
-            color: white;
-            padding: 8px 15px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 0.9em;
-        }
-
-        .add-btn {
-            background: #38ef7d;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-
-        @media (max-width: 968px) {
-            .container {
-                padding: 20px;
-            }
-            .table-list {
-                grid-template-columns: 1fr;
-            }
-            .relationship-grid {
-                grid-template-columns: 1fr;
-                gap: 15px;
-            }
-            .relationship-center {
-                order: -1;
-                min-width: auto;
-            }
-            .sticky-save-content {
-                flex-direction: column;
-                gap: 10px;
-            }
-            .sticky-save-content .btn {
-                width: 100%;
-            }
-        }
-    </style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Edit Module: {{ module.name }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#2b2b31;--panel:#222227;--muted:#9aa0ab;--card:#26282d;--accent:#19c37d;--accent-2:#667eea;--border:#3a3a40;--text:#e6e6ea;--surface:#2f3136;--warning:#f59e0b;--ai:#8b5cf6}
+    body{font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text);padding:18px;padding-bottom:120px}
+    .panel{background:var(--surface);border-radius:10px;padding:0;margin-bottom:14px;border:1px solid var(--border)}
+    .panel-header{display:flex;align-items:center;padding:12px 16px;cursor:pointer;transition:background 0.2s}
+    .panel-header:hover{background:rgba(255,255,255,0.03)}
+    .panel-title{font-weight:700}
+    .panel-body{padding:16px;display:none;border-top:1px solid var(--border)}
+    .table-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+    .table-item{background:var(--card);padding:10px;border-radius:8px;border:1px solid #2f3136;transition:border-color 0.2s}
+    .table-item:hover{border-color:var(--accent-2)}
+    .table-item.selected{border-color:var(--accent)}
+    .table-header{display:flex;align-items:center;gap:10px}
+    .columns-container{display:none;margin-top:8px;max-height:300px;overflow:auto;padding:8px;background:rgba(0,0,0,0.2);border-radius:6px}
+    .column-item{padding:6px 8px;display:flex;align-items:center;gap:8px}
+    .column-item:hover{background:rgba(255,255,255,0.05);border-radius:4px}
+    .kg-table{width:100%;border-collapse:collapse;margin-top:8px}
+    .kg-table th,.kg-table td{padding:10px;text-align:left;border-bottom:1px solid var(--border)}
+    .kg-table th{color:var(--muted);font-weight:500;font-size:0.9em}
+    textarea,input[type="text"]{width:100%;padding:8px;border-radius:6px;background:var(--card);border:1px solid #2f3136;color:var(--text);transition:border-color 0.2s}
+    textarea:focus,input[type="text"]:focus{outline:none;border-color:var(--accent-2)}
+    .muted{color:var(--muted)}
+    .small{font-size:0.85em}
+    .btn{padding:8px 12px;border-radius:8px;border:none;cursor:pointer;font-weight:600;transition:all 0.2s}
+    .btn:hover{transform:translateY(-1px)}
+    .btn:disabled{opacity:0.6;cursor:not-allowed;transform:none}
+    .btn-primary{background:linear-gradient(135deg,var(--accent-2),#4f46e5);color:white}
+    .btn-success{background:linear-gradient(135deg,var(--accent),#0ea36e);color:white}
+    .btn-secondary{background:var(--card);color:var(--text);border:1px solid var(--border)}
+    .btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:white}
+    .btn-ai{background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:white;padding:10px 16px}
+    .btn-ai:hover{box-shadow:0 4px 15px rgba(139,92,246,0.4)}
+    .sticky-bar{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(180deg, rgba(43,43,49,0.95), rgba(34,34,39,0.98));padding:14px;border-top:1px solid var(--border);backdrop-filter:blur(10px)}
+    .sticky-inner{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .selection-badge{background:var(--accent);color:white;padding:4px 10px;border-radius:12px;font-size:0.85em;font-weight:600}
+    .kg-section{margin-bottom:16px;background:var(--card);border-radius:8px;overflow:hidden}
+    .kg-section-header{padding:12px 16px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,0.2)}
+    .kg-section-header:hover{background:rgba(0,0,0,0.3)}
+    .kg-section-body{display:none;padding:16px}
+    .expand-icon{color:var(--muted);transition:transform 0.2s}
+    .expand-icon.expanded{transform:rotate(90deg)}
+    .info-box{background:rgba(102,126,234,0.1);border:1px solid rgba(102,126,234,0.3);padding:12px;border-radius:8px;margin-bottom:12px}
+    .ai-info-box{background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);padding:12px;border-radius:8px;margin-bottom:12px}
+    .dynamic-item{background:var(--card);padding:12px;border-radius:8px;margin-bottom:8px;border:1px solid var(--border)}
+    .rel-select{width:100%;padding:8px;border-radius:6px;background:var(--card);border:1px solid #2f3136;color:var(--text);margin-top:4px}
+    .loading-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;display:none}
+    .loading-content{background:var(--surface);padding:30px 40px;border-radius:12px;text-align:center}
+    .loading-spinner{width:50px;height:50px;border:4px solid var(--border);border-top-color:var(--ai);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .checkbox-group{display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(139,92,246,0.1);border-radius:8px;margin-right:auto}
+    .checkbox-group input[type="checkbox"]{width:18px;height:18px;cursor:pointer}
+    .checkbox-group label{cursor:pointer;font-weight:500}
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📝 Edit Module: {{ module.name }}</h1>
-        <p class="subtitle">Configure your module settings, select tables and columns</p>
-
-        <div id="alertBox" class="alert"></div>
-
-        <form method="POST" id="mainForm">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="save_all">
-            <input type="hidden" name="selected_columns" id="selectedColumnsInput" value="{}">
-
-            <!-- TABLE SELECTION SECTION -->
-            <div class="section">
-                <div class="section-title" onclick="toggleSection('tableSection')">
-                    <span class="collapse-icon" id="tableSection-icon">▼</span>
-                    📊 Table & Column Selection
-                </div>
-
-                <div class="section-content" id="tableSection-content">
-                    <div class="info-box">
-                        ℹ️ Select tables and their columns. After selecting, click "Update" to auto-fill descriptions.
-                    </div>
-
-                    <div class="expand-collapse-controls">
-                        <button type="button" class="expand-collapse-btn" onclick="expandAllTables()">
-                            ⬇️ Expand All Tables
-                        </button>
-                        <button type="button" class="expand-collapse-btn" onclick="collapseAllTables()">
-                            ⬆️ Collapse All Tables
-                        </button>
-                    </div>
-
-                    <div class="table-list">
-                        {% for table in tables %}
-                            <div class="table-item">
-                                <div class="table-header" onclick="toggleTableExpand('{{ table }}')">
-                                    <input 
-                                        type="checkbox" 
-                                        name="selected_tables" 
-                                        value="{{ table }}"
-                                        {% if table in selected_tables %}checked{% endif %}
-                                        onchange="toggleTableColumns('{{ table }}', this.checked)"
-                                        onclick="event.stopPropagation()"
-                                    >
-                                    <span class="table-name">{{ table }}</span>
-                                    <span class="table-expand-icon" id="expand_{{ table }}">▼</span>
-                                </div>
-                                <div class="columns-container" id="columns_{{ table }}" {% if table in selected_tables %}style="display:block"{% endif %}>
-                                    <small style="color: #999; display: block; margin: 10px 0 5px 0;">Loading columns...</small>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-
-                    <div class="button-group">
-                        <button type="button" class="btn btn-success" onclick="generateWithAI()" id="generateBtn">
-                            🤖 Update
-                        </button>
-                        <button type="button" class="btn btn-secondary" onclick="selectAllTables()">
-                            ✓ Select All Tables
-                        </button>
-                        <button type="button" class="btn btn-secondary" onclick="deselectAllTables()">
-                            ✗ Deselect All
-                        </button>
-                    </div>
-
-                    <div class="loading" id="loadingBox">
-                        <div class="spinner"></div>
-                        <p>Generating knowledge graph with AI... This may take a minute.</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- KNOWLEDGE GRAPH SECTION -->
-            <div class="section">
-                <div class="section-title" onclick="toggleSection('kgSection')">
-                    <span class="collapse-icon" id="kgSection-icon">▼</span>
-                    🧠 Knowledge Graph
-                    <div style="margin-left: auto; display: flex; gap: 10px;">
-                        <a href="/download-module-kg-csv/{{ module.id }}/" class="btn btn-secondary" style="font-size: 0.9em;" onclick="event.stopPropagation()">
-                            📥 Download CSV
-                        </a>
-                        <button type="button" class="btn btn-secondary" onclick="event.stopPropagation(); document.getElementById('uploadKGFile').click()" style="font-size: 0.9em;">
-                            📤 Upload CSV
-                        </button>
-                        <input type="file" id="uploadKGFile" accept=".csv" style="display: none;" onchange="uploadKG(this)">
-                    </div>
-                </div>
-
-                <div class="section-content" id="kgSection-content">
-                    <div class="expand-collapse-controls">
-                        <button type="button" class="expand-collapse-btn" onclick="expandAllKGTables()">
-                            ⬇️ Expand All
-                        </button>
-                        <button type="button" class="expand-collapse-btn" onclick="collapseAllKGTables()">
-                            ⬆️ Collapse All
-                        </button>
-                    </div>
-
-                    <div id="knowledgeGraphContainer">
-                        {% if knowledge_data %}
-                            {% for table, columns in knowledge_data.items %}
-                                <div class="kg-table-section">
-                                    <div class="kg-table-header" onclick="toggleKGTable('{{ table }}')">
-                                        <h3>📋 {{ table }}</h3>
-                                        <span class="kg-expand-icon" id="kg_expand_{{ table }}">▼</span>
-                                    </div>
-                                    
-                                    <div class="kg-table-content" id="kg_content_{{ table }}">
-                                        <!-- TABLE INFO TEXTBOX -->
-                                        <div class="table-info-box">
-                                            <label class="table-info-label">
-                                                📝 Table Description (What does this table represent?)
-                                            </label>
-                                            <textarea 
-                                                name="table_info__{{ table }}"
-                                                class="table-info-textarea"
-                                                placeholder="Describe the purpose of this table, what data it contains, and how it's used..."
-                                            >{{ table_info_map|get_item:table }}</textarea>
-                                        </div>
-                                        
-                                        <!-- COLUMNS TABLE -->
-                                        <table class="kg-table">
-                                            <thead>
-                                                <tr>
-                                                    <th style="width: 25%;">Column Name</th>
-                                                    <th style="width: 50%;">Description</th>
-                                                    <th style="width: 25%;">Data Type / Category</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {% for column, info in columns.items %}
-                                                    {% if column != 'TABLE_INFO' %}
-                                                        <tr>
-                                                            <td><strong>{{ column }}</strong></td>
-                                                            <td>
-                                                                <textarea 
-                                                                    name="kg_desc__{{ table }}__{{ column }}" 
-                                                                    placeholder="Describe what this column represents..."
-                                                                >{{ info.desc }}</textarea>
-                                                            </td>
-                                                            <td>
-                                                                <input 
-                                                                    type="text" 
-                                                                    name="kg_datatype__{{ table }}__{{ column }}" 
-                                                                    placeholder="e.g., identifier, text, number..."
-                                                                    value="{{ info.datatype }}"
-                                                                >
-                                                            </td>
-                                                        </tr>
-                                                    {% endif %}
-                                                {% endfor %}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        {% else %}
-                            <p style="text-align: center; color: #999; padding: 40px;">
-                                No tables selected yet. Select tables above to see their columns here.
-                            </p>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-
-            <!-- RELATIONSHIPS/JOINS SECTION -->
-            <div class="section">
-                <div class="section-title" onclick="toggleSection('relSection')">
-                    <span class="collapse-icon" id="relSection-icon">▼</span>
-                    🔗 Table Relationships / Joins
-                </div>
-
-                <div class="section-content" id="relSection-content">
-                    <div class="info-box">
-                        ℹ️ Define how tables relate to each other. This helps generate better SQL queries with proper joins.
-                        <br><strong>Example:</strong> customers (customer_id) → One-to-Many → orders (customer_id)
-                    </div>
-
-                    <div class="dynamic-list" id="relationshipsList">
-                        {% for rel in relationships %}
-                            <div class="relationship-item">
-                                <div class="relationship-grid">
-                                    <!-- Left Side -->
-                                    <div class="relationship-side">
-                                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Left Table</label>
-                                        <select name="rel_left_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'left')">
-                                            <option value="">Select table...</option>
-                                            {% for table in selected_tables %}
-                                                <option value="{{ table }}" {% if rel.left_table == table %}selected{% endif %}>{{ table }}</option>
-                                            {% endfor %}
-                                        </select>
-                                        
-                                        <label style="font-size: 0.85em; color: #666; margin: 10px 0 5px 0; display: block;">Column</label>
-                                        <select name="rel_left_column" class="rel-select rel-column-select" data-value="{{ rel.left_column }}">
-                                            <option value="">Select column...</option>
-                                        </select>
-                                    </div>
-
-                                    <!-- Relationship Type -->
-                                    <div class="relationship-center">
-                                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Relationship</label>
-                                        <select name="rel_type" class="rel-type-select">
-                                            <option value="one-to-one" {% if rel.type == 'one-to-one' %}selected{% endif %}>1:1 (One to One)</option>
-                                            <option value="one-to-many" {% if rel.type == 'one-to-many' %}selected{% endif %}>1:N (One to Many)</option>
-                                            <option value="many-to-one" {% if rel.type == 'many-to-one' %}selected{% endif %}>N:1 (Many to One)</option>
-                                            <option value="many-to-many" {% if rel.type == 'many-to-many' %}selected{% endif %}>N:N (Many to Many)</option>
-                                        </select>
-                                        <div class="rel-arrow">↔️</div>
-                                    </div>
-
-                                    <!-- Right Side -->
-                                    <div class="relationship-side">
-                                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Right Table</label>
-                                        <select name="rel_right_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'right')">
-                                            <option value="">Select table...</option>
-                                            {% for table in selected_tables %}
-                                                <option value="{{ table }}" {% if rel.right_table == table %}selected{% endif %}>{{ table }}</option>
-                                            {% endfor %}
-                                        </select>
-                                        
-                                        <label style="font-size: 0.85em; color: #666; margin: 10px 0 5px 0; display: block;">Column</label>
-                                        <select name="rel_right_column" class="rel-select rel-column-select" data-value="{{ rel.right_column }}">
-                                            <option value="">Select column...</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <button type="button" class="remove-btn" onclick="removeItem(this)" style="margin-top: 15px;">🗑️ Remove Relationship</button>
-                            </div>
-                        {% endfor %}
-                    </div>
-
-                    <button type="button" class="add-btn" onclick="addRelationship()">+ Add Relationship</button>
-                </div>
-            </div>
-
-            <!-- RCA SECTION -->
-            <div class="section">
-                <div class="section-title" onclick="toggleSection('rcaSection')">
-                    <span class="collapse-icon collapsed" id="rcaSection-icon">▼</span>
-                    📌 Root Cause Analysis (RCA) Guidelines
-                </div>
-                <div class="section-content collapsed" id="rcaSection-content">
-                    <div class="dynamic-list" id="rcaList">
-                        {% for rca in rca_list %}
-                            <div class="dynamic-item">
-                                <input type="text" name="rca_title" placeholder="RCA Title" value="{{ rca.title }}">
-                                <textarea name="rca_content" placeholder="RCA Content" rows="3">{{ rca.content }}</textarea>
-                                <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
-                            </div>
-                        {% endfor %}
-                    </div>
-                    <button type="button" class="add-btn" onclick="addRCA()">+ Add RCA</button>
-                </div>
-            </div>
-
-            <!-- POS TAGGING SECTION -->
-            <div class="section">
-                <div class="section-title" onclick="toggleSection('posSection')">
-                    <span class="collapse-icon collapsed" id="posSection-icon">▼</span>
-                    🏷️ POS Tagging / Entity References
-                </div>
-                <div class="section-content collapsed" id="posSection-content">
-                    <div class="dynamic-list" id="posList">
-                        {% for pos in pos_tagging %}
-                            <div class="dynamic-item">
-                                <input type="text" name="pos_name" placeholder="Entity Name" value="{{ pos.name }}">
-                                <input type="text" name="pos_reference" placeholder="Reference/Synonym" value="{{ pos.reference }}">
-                                <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
-                            </div>
-                        {% endfor %}
-                    </div>
-                    <button type="button" class="add-btn" onclick="addPOS()">+ Add Entity</button>
-                </div>
-            </div>
-
-            <!-- METRICS SECTION -->
-            <div class="section">
-                <div class="section-title" onclick="toggleSection('metricsSection')">
-                    <span class="collapse-icon collapsed" id="metricsSection-icon">▼</span>
-                    📊 Metrics / KPIs
-                </div>
-                <div class="section-content collapsed" id="metricsSection-content">
-                    <div class="dynamic-list" id="metricsList">
-                        {% for metric_name, metric_desc in metrics_data.items %}
-                            <div class="dynamic-item">
-                                <input type="text" name="metric_name" placeholder="Metric Name" value="{{ metric_name }}">
-                                <textarea name="metric_desc" placeholder="Metric Description" rows="2">{{ metric_desc }}</textarea>
-                                <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
-                            </div>
-                        {% endfor %}
-                    </div>
-                    <button type="button" class="add-btn" onclick="addMetric()">+ Add Metric</button>
-                </div>
-            </div>
-
-            <!-- EXTRA SUGGESTIONS SECTION -->
-            <div class="section">
-                <div class="section-title" onclick="toggleSection('extraSection')">
-                    <span class="collapse-icon collapsed" id="extraSection-icon">▼</span>
-                    💡 Extra Suggestions
-                </div>
-                <div class="section-content collapsed" id="extraSection-content">
-                    <textarea 
-                        name="extra_suggestions" 
-                        rows="5" 
-                        placeholder="Any additional context, notes, or suggestions for query processing..."
-                        style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit;"
-                    >{{ extra_suggestions }}</textarea>
-                </div>
-            </div>
-        </form>
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <div style="font-weight:600;font-size:1.1em;margin-bottom:8px">🤖 AI is generating descriptions...</div>
+      <div class="muted">This may take a moment depending on the number of tables/columns</div>
     </div>
+  </div>
 
-    <!-- STICKY SAVE BAR -->
-    <div class="sticky-save-bar">
-        <div class="sticky-save-content">
-            <a href="{% url 'dashboard' %}" class="btn btn-secondary">← Back to Dashboard</a>
-            <a href="{% url 'chat_module' module.id %}" class="btn btn-success">💬 Go to Chat</a>
-            <button type="button" class="btn btn-primary" onclick="document.getElementById('mainForm').submit()">
-                💾 Save All Changes
-            </button>
+  <h1 style="margin-bottom:4px">Edit Module — {{ module.name }}</h1>
+  <p class="muted" style="margin-bottom:20px">Manage tables, columns and the knowledge graph.</p>
+
+  <form id="mainForm" method="POST">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="save_all">
+    <input type="hidden" name="run_ai" id="runAiInput" value="false">
+    <input type="hidden" name="selected_columns" id="selectedColumnsInput" value='{{ selected_columns_json|safe }}'>
+
+    <!-- TABLE & COLUMN SELECTION PANEL -->
+    <div class="panel">
+      <div class="panel-header" onclick="toggleSection('tablePanel')">
+        <span class="expand-icon" id="tablePanel-icon">▶</span>
+        <span style="margin-left:8px" class="panel-title">📋 Table & Column Selection</span>
+        <span style="margin-left:auto" class="muted small">Select tables & columns to include</span>
+      </div>
+      <div id="tablePanel-body" class="panel-body">
+        <div class="info-box">
+          <strong>How it works:</strong> Check tables to include them. Expand to select specific columns. 
+          The Knowledge Graph below will automatically update to show only selected tables/columns.
         </div>
+        
+        <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+          <button type="button" class="btn btn-success" id="selectAllTablesBtn">Select All Tables</button>
+          <button type="button" class="btn btn-secondary" id="deselectAllTablesBtn">Deselect All</button>
+          <div style="margin-left:auto" id="selectionSummary" class="muted"></div>
+        </div>
+
+        <div class="table-list">
+          {% for table in tables %}
+          <div class="table-item {% if table in selected_tables %}selected{% endif %}" data-table="{{ table }}">
+            <div class="table-header">
+              <input type="checkbox" name="selected_tables" value="{{ table }}" 
+                     {% if table in selected_tables %}checked{% endif %} 
+                     onchange="onTableCheckboxChange(this,'{{ table }}')" 
+                     onclick="event.stopPropagation()">
+              <div style="flex:1;cursor:pointer;font-weight:500" onclick="onTableNameClick('{{ table }}', event)">{{ table }}</div>
+              <span class="expand-icon" id="expand_{{ table }}" onclick="toggleTableExpand('{{ table }}'); event.stopPropagation()">▶</span>
+            </div>
+            <div class="columns-container" id="columns_{{ table }}">
+              <div class="muted small">Loading columns...</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
     </div>
 
-    <script>
-        let selectedColumns = {};
-        let loadedTables = new Set();
-
-        // Toggle section expand/collapse
-        function toggleSection(sectionId) {
-            const content = document.getElementById(sectionId + '-content');
-            const icon = document.getElementById(sectionId + '-icon');
-            
-            content.classList.toggle('collapsed');
-            icon.classList.toggle('collapsed');
-        }
-
-        // Toggle table expand in table selection
-        function toggleTableExpand(tableName) {
-            const container = document.getElementById(`columns_${tableName}`);
-            const icon = document.getElementById(`expand_${tableName}`);
-            
-            if (container.classList.contains('show')) {
-                container.classList.remove('show');
-                icon.classList.add('collapsed');
-            } else {
-                container.classList.add('show');
-                icon.classList.remove('collapsed');
-            }
-        }
-
-        // Expand/Collapse all tables in selection
-        function expandAllTables() {
-            document.querySelectorAll('.columns-container').forEach(container => {
-                container.classList.add('show');
-            });
-            document.querySelectorAll('.table-expand-icon').forEach(icon => {
-                icon.classList.remove('collapsed');
-            });
-        }
-
-        function collapseAllTables() {
-            document.querySelectorAll('.columns-container').forEach(container => {
-                container.classList.remove('show');
-            });
-            document.querySelectorAll('.table-expand-icon').forEach(icon => {
-                icon.classList.add('collapsed');
-            });
-        }
-
-        // Toggle KG table expand/collapse
-        function toggleKGTable(tableName) {
-            const content = document.getElementById(`kg_content_${tableName}`);
-            const icon = document.getElementById(`kg_expand_${tableName}`);
-            
-            content.classList.toggle('collapsed');
-            icon.classList.toggle('collapsed');
-        }
-
-        // Expand/Collapse all KG tables
-        function expandAllKGTables() {
-            document.querySelectorAll('.kg-table-content').forEach(content => {
-                content.classList.remove('collapsed');
-            });
-            document.querySelectorAll('.kg-expand-icon').forEach(icon => {
-                icon.classList.remove('collapsed');
-            });
-        }
-
-        function collapseAllKGTables() {
-            document.querySelectorAll('.kg-table-content').forEach(content => {
-                content.classList.add('collapsed');
-            });
-            document.querySelectorAll('.kg-expand-icon').forEach(icon => {
-                icon.classList.add('collapsed');
-            });
-        }
-
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 Page loaded');
-            
-            // Load saved selections
-            try {
-                const savedColumns = {{ selected_columns|safe }};
-                if (savedColumns && typeof savedColumns === 'object') {
-                    selectedColumns = savedColumns;
-                    console.log('💾 Loaded selections:', selectedColumns);
-                }
-            } catch (e) {
-                selectedColumns = {};
-            }
-            
-            // Load columns for selected tables
-            const selectedTableCheckboxes = document.querySelectorAll('input[name="selected_tables"]:checked');
-            selectedTableCheckboxes.forEach(checkbox => {
-                loadTableColumns(checkbox.value, true);
-            });
-
-            loadExistingRelationshipColumns();
-        });
-
-        // ... REST OF YOUR EXISTING JAVASCRIPT ...
-        // (Keep all the existing functions: loadTableColumns, toggleTableColumns, 
-        //  toggleColumn, generateWithAI, selectAllTables, etc.)
+    <!-- KNOWLEDGE GRAPH PANEL -->
+    <div class="panel">
+      <div class="panel-header" onclick="toggleSection('kgPanel')">
+        <span class="expand-icon" id="kgPanel-icon">▶</span>
+        <span style="margin-left:8px" class="panel-title">🧠 Knowledge Graph</span>
+        <span style="margin-left:auto" class="muted small">Edit descriptions & datatypes for selected columns</span>
+      </div>
+      <div id="kgPanel-body" class="panel-body">
+        <div class="ai-info-box">
+          <strong>🤖 AI Auto-Fill:</strong> Check the "Run AI to fill blank descriptions" option at the bottom and click Save. 
+          AI will automatically generate descriptions for any empty table or column description fields.
+        </div>
         
-        // Load existing relationship columns
-        function loadExistingRelationshipColumns() {
-            document.querySelectorAll('.relationship-item').forEach(item => {
-                const leftTableSelect = item.querySelector('select[name="rel_left_table"]');
-                const rightTableSelect = item.querySelector('select[name="rel_right_table"]');
-                const leftColumnSelect = item.querySelector('select[name="rel_left_column"]');
-                const rightColumnSelect = item.querySelector('select[name="rel_right_column"]');
-                
-                const savedLeftColumn = leftColumnSelect.getAttribute('data-value');
-                const savedRightColumn = rightColumnSelect.getAttribute('data-value');
-                
-                if (leftTableSelect.value) {
-                    loadColumnsForRelationship(leftTableSelect, 'left').then(() => {
-                        if (savedLeftColumn) {
-                            leftColumnSelect.value = savedLeftColumn;
-                        }
-                    });
-                }
-                
-                if (rightTableSelect.value) {
-                    loadColumnsForRelationship(rightTableSelect, 'right').then(() => {
-                        if (savedRightColumn) {
-                            rightColumnSelect.value = savedRightColumn;
-                        }
-                    });
-                }
-            });
-        }
-
-        async function loadTableColumns(tableName, isChecked) {
-            console.log(`📊 loadTableColumns: ${tableName}, checked: ${isChecked}`);
-            
-            if (isChecked) {
-                if (!loadedTables.has(tableName)) {
-                    try {
-                        const container = document.getElementById(`columns_${tableName}`);
-                        if (!container) return;
-                        
-                        container.innerHTML = '<small style="color: #667eea; padding: 10px;">⏳ Loading...</small>';
-                        container.classList.add('show');
-
-                        const response = await fetch(`/get-table-columns/?table=${tableName}`);
-                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                        
-                        const data = await response.json();
-                        
-                        if (data.columns && data.columns.length > 0) {
-                            const savedCols = selectedColumns[tableName] || [];
-                            
-                            if (savedCols.length === 0 && !selectedColumns.hasOwnProperty(tableName)) {
-                                selectedColumns[tableName] = data.columns.map(col => col.name);
-                            }
-                            
-                            let html = '<div style="margin-top: 10px; padding: 0 10px;">';
-                            html += '<small style="color: #999; display: block; margin-bottom: 8px;">Select columns:</small>';
-                            
-                            data.columns.forEach(col => {
-                                const colId = `col_${tableName}_${col.name}`;
-                                const isSelected = selectedColumns[tableName] && selectedColumns[tableName].includes(col.name);
-                                
-                                html += `
-                                    <div class="column-item">
-                                        <label>
-                                            <input 
-                                                type="checkbox" 
-                                                id="${colId}"
-                                                value="${col.name}"
-                                                ${isSelected ? 'checked' : ''}
-                                                onchange="toggleColumn('${tableName}', '${col.name}', this.checked)"
-                                            >
-                                            <span>${col.name}</span>
-                                        </label>
-                                    </div>
-                                `;
-                            });
-                            html += '</div>';
-                            
-                            container.innerHTML = html;
-                            loadedTables.add(tableName);
-                            console.log(`✅ Loaded ${tableName}: ${selectedColumns[tableName].length} selected`);
-                        }
-                    } catch (error) {
-                        console.error(`❌ Error:`, error);
-                    }
-                } else {
-                    document.getElementById(`columns_${tableName}`).classList.add('show');
-                }
-            } else {
-                document.getElementById(`columns_${tableName}`).classList.remove('show');
-            }
-        }
-
-        function toggleTableColumns(tableName, isChecked) {
-            loadTableColumns(tableName, isChecked);
-        }
-
-        function toggleColumn(tableName, columnName, isChecked) {
-            if (!selectedColumns[tableName]) {
-                selectedColumns[tableName] = [];
-            }
-            
-            if (isChecked) {
-                if (!selectedColumns[tableName].includes(columnName)) {
-                    selectedColumns[tableName].push(columnName);
-                }
-            } else {
-                selectedColumns[tableName] = selectedColumns[tableName].filter(c => c !== columnName);
-            }
-        }
-
-        async function generateWithAI() {
-            const selectedTables = Array.from(document.querySelectorAll('input[name="selected_tables"]:checked'))
-                .map(cb => cb.value);
-            
-            if (selectedTables.length === 0) {
-                showAlert('Please select at least one table.', 'error');
-                return;
-            }
-
-            const tablesWithoutColumns = [];
-            for (const table of selectedTables) {
-                if (!selectedColumns[table] || selectedColumns[table].length === 0) {
-                    tablesWithoutColumns.push(table);
-                }
-            }
-
-            if (tablesWithoutColumns.length > 0) {
-                showAlert(`Please select columns for: ${tablesWithoutColumns.join(', ')}`, 'error');
-                return;
-            }
-
-            const generateBtn = document.getElementById('generateBtn');
-            const loadingBox = document.getElementById('loadingBox');
-            
-            generateBtn.disabled = true;
-            loadingBox.classList.add('show');
-
-            try {
-                const formData = new FormData();
-                formData.append('action', 'generate_kg');
-                formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-                
-                selectedTables.forEach(table => {
-                    formData.append('selected_tables', table);
-                });
-                
-                formData.append('selected_columns', JSON.stringify(selectedColumns));
-
-                const response = await fetch(window.location.href, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    showAlert(data.message, 'success');
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1500);
-                } else {
-                    showAlert(data.error || 'Error generating knowledge graph', 'error');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showAlert('Failed to generate knowledge graph.', 'error');
-            } finally {
-                generateBtn.disabled = false;
-                loadingBox.classList.remove('show');
-            }
-        }
-
-        function selectAllTables() {
-            const checkboxes = document.querySelectorAll('input[name="selected_tables"]');
-            checkboxes.forEach(cb => {
-                if (!cb.checked) {
-                    cb.checked = true;
-                    loadTableColumns(cb.value, true);
-                }
-            });
-        }
-
-        function deselectAllTables() {
-            const checkboxes = document.querySelectorAll('input[name="selected_tables"]');
-            checkboxes.forEach(cb => {
-                cb.checked = false;
-                const container = document.getElementById(`columns_${cb.value}`);
-                if (container) container.classList.remove('show');
-            });
-        }
-
-        async function loadColumnsForRelationship(selectElement, side) {
-            const tableName = selectElement.value;
-            if (!tableName) return Promise.resolve();
-
-            const relationshipItem = selectElement.closest('.relationship-item');
-            const columnSelect = relationshipItem.querySelector(`select[name="rel_${side}_column"]`);
-
-            try {
-                columnSelect.innerHTML = '<option value="">Loading...</option>';
-                
-                const response = await fetch(`/get-table-columns/?table=${tableName}`);
-                const data = await response.json();
-
-                if (data.columns) {
-                    columnSelect.innerHTML = '<option value="">Select column...</option>';
-                    data.columns.forEach(col => {
-                        const option = document.createElement('option');
-                        option.value = col.name;
-                        option.textContent = col.name;
-                        columnSelect.appendChild(option);
-                    });
-                    
-                    const savedValue = columnSelect.getAttribute('data-value');
-                    if (savedValue) {
-                        columnSelect.value = savedValue;
-                    }
-                }
-            } catch (error) {
-                console.error('Error:', error);
-            }
-            
-            return Promise.resolve();
-        }
-
-        function addRelationship() {
-            const list = document.getElementById('relationshipsList');
-            const item = document.createElement('div');
-            item.className = 'relationship-item';
-            
-            const selectedTables = Array.from(document.querySelectorAll('input[name="selected_tables"]:checked'))
-                .map(cb => cb.value);
-            
-            let tableOptions = '<option value="">Select table...</option>';
-            selectedTables.forEach(table => {
-                tableOptions += `<option value="${table}">${table}</option>`;
-            });
-            
-            item.innerHTML = `
-                <div class="relationship-grid">
-                    <div class="relationship-side">
-                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Left Table</label>
-                        <select name="rel_left_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'left')">
-                            ${tableOptions}
-                        </select>
-                        
-                        <label style="font-size: 0.85em; color: #666; margin: 10px 0 5px 0; display: block;">Column</label>
-                        <select name="rel_left_column" class="rel-select rel-column-select">
-                            <option value="">Select column...</option>
-                        </select>
-                    </div>
-
-                    <div class="relationship-center">
-                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Relationship</label>
-                        <select name="rel_type" class="rel-type-select">
-                            <option value="one-to-one">1:1 (One to One)</option>
-                            <option value="one-to-many" selected>1:N (One to Many)</option>
-                            <option value="many-to-one">N:1 (Many to One)</option>
-                            <option value="many-to-many">N:N (Many to Many)</option>
-                        </select>
-                        <div class="rel-arrow">↔️</div>
-                    </div>
-
-                    <div class="relationship-side">
-                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Right Table</label>
-                        <select name="rel_right_table" class="rel-select" onchange="loadColumnsForRelationship(this, 'right')">
-                            ${tableOptions}
-                        </select>
-                        
-                        <label style="font-size: 0.85em; color: #666; margin: 10px 0 5px 0; display: block;">Column</label>
-                        <select name="rel_right_column" class="rel-select rel-column-select">
-                            <option value="">Select column...</option>
-                        </select>
-                    </div>
+        <div id="kgContainer">
+          {% if knowledge_data %}
+            {% for table, cols in knowledge_data.items %}
+            <div class="kg-section" data-kg-table="{{ table }}">
+              <div class="kg-section-header" onclick="toggleKGTable('{{ table }}')">
+                <div>
+                  <strong style="color:var(--text)">{{ table }}</strong>
+                  <span class="muted small" style="margin-left:8px">({{ cols|length }} columns)</span>
                 </div>
+                <span class="expand-icon" id="kg_icon_{{ table }}">▶</span>
+              </div>
+              <div id="kg_wrapper_{{ table }}" class="kg-section-body">
+                <div style="margin-bottom:12px">
+                  <label class="muted small">Table Description</label>
+                  <textarea name="table_info__{{ table }}" rows="2" placeholder="Describe what this table contains... (AI will fill if empty)">{{ table_info_map|get_item:table }}</textarea>
+                </div>
+                <table class="kg-table">
+                  <thead>
+                    <tr>
+                      <th style="width:25%">Column</th>
+                      <th style="width:50%">Description</th>
+                      <th style="width:25%">Datatype</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for col_name, info in cols.items %}
+                    <tr data-column="{{ col_name }}">
+                      <td style="font-weight:600">{{ col_name }}</td>
+                      <td><textarea name="kg_desc__{{ table }}__{{ col_name }}" rows="2" placeholder="Describe this column... (AI will fill if empty)">{{ info.desc }}</textarea></td>
+                      <td><input type="text" name="kg_datatype__{{ table }}__{{ col_name }}" value="{{ info.datatype }}" placeholder="e.g., varchar, int"></td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div class="muted" style="padding:20px;text-align:center">
+              No tables selected yet. Select tables above and save to see the knowledge graph.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
 
-                <button type="button" class="remove-btn" onclick="removeItem(this)" style="margin-top: 15px;">🗑️ Remove Relationship</button>
-            `;
-            
-            list.appendChild(item);
+    <!-- RELATIONSHIPS PANEL -->
+    <div class="panel">
+      <div class="panel-header" onclick="toggleSection('relPanel')">
+        <span class="expand-icon" id="relPanel-icon">▶</span>
+        <span style="margin-left:8px" class="panel-title">🔗 Table Relationships / Joins</span>
+        <span style="margin-left:auto" class="muted small">Define how tables connect</span>
+      </div>
+      <div id="relPanel-body" class="panel-body">
+        <div id="relationshipsList">
+          {% for rel in relationships %}
+          <div class="dynamic-item relationship-item">
+            <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:start">
+              <div>
+                <label class="muted small">Left Table</label>
+                <select name="rel_left_table" class="rel-select" onchange="loadColumnsForRelationship(this,'left')">
+                  <option value="">Select table...</option>
+                  {% for t in selected_tables %}
+                    <option value="{{ t }}" {% if rel.left_table == t %}selected{% endif %}>{{ t }}</option>
+                  {% endfor %}
+                </select>
+                <label class="muted small" style="margin-top:8px;display:block">Column</label>
+                <select name="rel_left_column" class="rel-select rel-column-select" data-value="{{ rel.left_column }}">
+                  <option value="">Select column...</option>
+                </select>
+              </div>
+              <div style="text-align:center;padding-top:20px">
+                <label class="muted small">Type</label>
+                <select name="rel_type" class="rel-select" style="width:100px">
+                  <option value="one-to-one" {% if rel.type == 'one-to-one' %}selected{% endif %}>1:1</option>
+                  <option value="one-to-many" {% if rel.type == 'one-to-many' %}selected{% endif %}>1:N</option>
+                  <option value="many-to-one" {% if rel.type == 'many-to-one' %}selected{% endif %}>N:1</option>
+                  <option value="many-to-many" {% if rel.type == 'many-to-many' %}selected{% endif %}>N:N</option>
+                </select>
+              </div>
+              <div>
+                <label class="muted small">Right Table</label>
+                <select name="rel_right_table" class="rel-select" onchange="loadColumnsForRelationship(this,'right')">
+                  <option value="">Select table...</option>
+                  {% for t in selected_tables %}
+                    <option value="{{ t }}" {% if rel.right_table == t %}selected{% endif %}>{{ t }}</option>
+                  {% endfor %}
+                </select>
+                <label class="muted small" style="margin-top:8px;display:block">Column</label>
+                <select name="rel_right_column" class="rel-select rel-column-select" data-value="{{ rel.right_column }}">
+                  <option value="">Select column...</option>
+                </select>
+              </div>
+            </div>
+            <div style="margin-top:10px;text-align:right">
+              <button type="button" class="btn btn-danger small" onclick="this.closest('.relationship-item').remove()">Remove</button>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <button type="button" class="btn btn-success" onclick="addRelationship()" style="margin-top:8px">+ Add Relationship</button>
+      </div>
+    </div>
+
+    <!-- RCA PANEL -->
+    <div class="panel">
+      <div class="panel-header" onclick="toggleSection('rcaPanel')">
+        <span class="expand-icon" id="rcaPanel-icon">▶</span>
+        <span style="margin-left:8px" class="panel-title">📌 Root Cause Analysis (RCA)</span>
+      </div>
+      <div id="rcaPanel-body" class="panel-body">
+        <div id="rcaList">
+          {% for r in rca_list %}
+          <div class="dynamic-item">
+            <input type="text" name="rca_title" value="{{ r.title }}" placeholder="RCA Title" style="margin-bottom:8px">
+            <textarea name="rca_content" placeholder="RCA Content" rows="3">{{ r.content }}</textarea>
+            <div style="margin-top:8px;text-align:right">
+              <button type="button" class="btn btn-danger small" onclick="this.closest('.dynamic-item').remove()">Remove</button>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <button type="button" class="btn btn-success" onclick="addRCA()" style="margin-top:8px">+ Add RCA</button>
+      </div>
+    </div>
+
+    <!-- POS TAGGING PANEL -->
+    <div class="panel">
+      <div class="panel-header" onclick="toggleSection('posPanel')">
+        <span class="expand-icon" id="posPanel-icon">▶</span>
+        <span style="margin-left:8px" class="panel-title">🏷️ POS Tagging / Entities</span>
+      </div>
+      <div id="posPanel-body" class="panel-body">
+        <div id="posList">
+          {% for p in pos_tagging %}
+          <div class="dynamic-item">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <label class="muted small">Entity Name</label>
+                <input type="text" name="pos_name" value="{{ p.name }}" placeholder="e.g., customer_name">
+              </div>
+              <div>
+                <label class="muted small">Reference/Synonym</label>
+                <input type="text" name="pos_reference" value="{{ p.reference }}" placeholder="e.g., client, buyer">
+              </div>
+            </div>
+            <div style="margin-top:8px;text-align:right">
+              <button type="button" class="btn btn-danger small" onclick="this.closest('.dynamic-item').remove()">Remove</button>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <button type="button" class="btn btn-success" onclick="addPOS()" style="margin-top:8px">+ Add Entity</button>
+      </div>
+    </div>
+
+    <!-- METRICS PANEL -->
+    <div class="panel">
+      <div class="panel-header" onclick="toggleSection('metricsPanel')">
+        <span class="expand-icon" id="metricsPanel-icon">▶</span>
+        <span style="margin-left:8px" class="panel-title">📊 Metrics / KPIs</span>
+      </div>
+      <div id="metricsPanel-body" class="panel-body">
+        <div id="metricsList">
+          {% for name, desc in metrics_data.items %}
+          <div class="dynamic-item">
+            <div style="display:grid;grid-template-columns:1fr 2fr;gap:12px">
+              <div>
+                <label class="muted small">Metric Name</label>
+                <input type="text" name="metric_name" value="{{ name }}" placeholder="e.g., revenue">
+              </div>
+              <div>
+                <label class="muted small">Description / Formula</label>
+                <textarea name="metric_desc" rows="2" placeholder="e.g., SUM(amount) - total revenue">{{ desc }}</textarea>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <button type="button" class="btn btn-success" onclick="addMetric()" style="margin-top:8px">+ Add Metric</button>
+      </div>
+    </div>
+
+    <!-- EXTRA SUGGESTIONS PANEL -->
+    <div class="panel">
+      <div class="panel-header" onclick="toggleSection('extraPanel')">
+        <span class="expand-icon" id="extraPanel-icon">▶</span>
+        <span style="margin-left:8px" class="panel-title">💡 Extra Suggestions</span>
+      </div>
+      <div id="extraPanel-body" class="panel-body">
+        <textarea id="extraSuggestions" name="extra_suggestions" rows="4" placeholder="Add any extra context or suggestions for the AI...">{{ extra_suggestions }}</textarea>
+      </div>
+    </div>
+
+  </form>
+
+  <!-- STICKY BOTTOM BAR -->
+  <div class="sticky-bar">
+    <div class="sticky-inner">
+      <div class="checkbox-group">
+        <input type="checkbox" id="runAiCheckbox" checked>
+        <label for="runAiCheckbox">🤖 Run AI to fill blank descriptions</label>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span id="statusText" class="muted"></span>
+        <a class="btn btn-primary" href="{% url 'chat_module' module.id %}">💬 Chat</a>
+        <button type="button" id="saveAllBtn" class="btn btn-ai" onclick="saveAllChanges()">
+          💾 Save & Generate Descriptions
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==================== STATE MANAGEMENT ====================
+    let selectedColumns = {};
+    try {
+      selectedColumns = JSON.parse(document.getElementById('selectedColumnsInput').value || "{}");
+    } catch(e) { 
+      selectedColumns = {}; 
+    }
+    
+    let loadedTables = new Set();
+    let tableColumnsCache = {};
+
+    function syncHiddenInput() {
+      document.getElementById('selectedColumnsInput').value = JSON.stringify(selectedColumns || {});
+      updateSelectionSummary();
+    }
+
+    function updateSelectionSummary() {
+      const tableCount = Object.keys(selectedColumns).length;
+      let columnCount = 0;
+      for (const cols of Object.values(selectedColumns)) {
+        columnCount += cols.length;
+      }
+      
+      const summaryEl = document.getElementById('selectionSummary');
+      if (summaryEl) {
+        summaryEl.innerHTML = '<span class="selection-badge">' + tableCount + ' tables, ' + columnCount + ' columns</span>';
+      }
+    }
+
+    // ==================== PANEL TOGGLING ====================
+    function toggleSection(id) {
+      const icon = document.getElementById(id + '-icon');
+      const body = document.getElementById(id + '-body');
+      if (!body) return;
+
+      if (body.style.display === 'block') {
+        body.style.display = 'none';
+        if (icon) {
+          icon.textContent = '▶';
+          icon.classList.remove('expanded');
+        }
+      } else {
+        body.style.display = 'block';
+        if (icon) {
+          icon.textContent = '▼';
+          icon.classList.add('expanded');
+        }
+      }
+    }
+
+    function toggleKGTable(table) {
+      const wrapper = document.getElementById('kg_wrapper_' + table);
+      const icon = document.getElementById('kg_icon_' + table);
+      if (!wrapper) return;
+
+      if (wrapper.style.display === 'block') {
+        wrapper.style.display = 'none';
+        if (icon) {
+          icon.textContent = '▶';
+          icon.classList.remove('expanded');
+        }
+      } else {
+        wrapper.style.display = 'block';
+        if (icon) {
+          icon.textContent = '▼';
+          icon.classList.add('expanded');
+        }
+      }
+    }
+
+    // ==================== TABLE/COLUMN LOADING ====================
+    async function loadTableColumns(tableName) {
+      const container = document.getElementById('columns_' + tableName);
+      if (!container) return;
+
+      if (tableColumnsCache[tableName]) {
+        renderColumns(tableName, tableColumnsCache[tableName]);
+        return;
+      }
+
+      container.innerHTML = '<div class="muted small">⏳ Loading columns...</div>';
+
+      try {
+        const resp = await fetch('/get-table-columns/?table=' + encodeURIComponent(tableName));
+        const data = await resp.json();
+
+        if (!data.columns || data.columns.length === 0) {
+          container.innerHTML = '<div class="muted small">No columns found</div>';
+          return;
         }
 
-        async function uploadKG(input) {
-            const file = input.files[0];
-            if (!file) return;
-            
-            if (!file.name.endsWith('.csv')) {
-                alert('Please upload a CSV file');
-                return;
+        tableColumnsCache[tableName] = data.columns;
+        renderColumns(tableName, data.columns);
+        loadedTables.add(tableName);
+
+      } catch (e) {
+        console.error('Error loading columns for', tableName, e);
+        container.innerHTML = '<div class="muted small" style="color:#fca5a5">Error loading columns</div>';
+      }
+    }
+
+    function renderColumns(tableName, columns) {
+      const container = document.getElementById('columns_' + tableName);
+      if (!container) return;
+
+      const currentSelection = selectedColumns[tableName] || [];
+
+      let html = '<div style="display:flex;gap:8px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">' +
+        '<button type="button" class="btn btn-success small" style="padding:4px 8px;font-size:11px" onclick="selectAllColumnsForTable(\'' + tableName + '\')">All</button>' +
+        '<button type="button" class="btn btn-secondary small" style="padding:4px 8px;font-size:11px" onclick="deselectAllColumnsForTable(\'' + tableName + '\')">None</button>' +
+        '<span class="muted small" style="margin-left:auto">' + columns.length + ' columns</span></div>';
+
+      for (const col of columns) {
+        const colName = col.name;
+        const colType = col.type || '';
+        const safeId = ('col_' + tableName + '_' + colName).replace(/[^a-zA-Z0-9_]/g, '_');
+        const checked = currentSelection.includes(colName) ? 'checked' : '';
+
+        html += '<div class="column-item">' +
+          '<input type="checkbox" id="' + safeId + '" value="' + colName + '" ' + checked +
+          ' onchange="toggleColumn(\'' + tableName + '\', \'' + colName + '\', this.checked)">' +
+          '<label for="' + safeId + '" style="flex:1;cursor:pointer">' + colName + '</label>' +
+          '<span class="muted small">' + colType + '</span></div>';
+      }
+
+      container.innerHTML = html;
+    }
+
+    function toggleTableExpand(tableName) {
+      const container = document.getElementById('columns_' + tableName);
+      const icon = document.getElementById('expand_' + tableName);
+      if (!container) return;
+
+      const isExpanded = container.style.display === 'block';
+
+      if (isExpanded) {
+        container.style.display = 'none';
+        if (icon) {
+          icon.textContent = '▶';
+          icon.classList.remove('expanded');
+        }
+      } else {
+        if (!loadedTables.has(tableName)) {
+          loadTableColumns(tableName).then(function() {
+            container.style.display = 'block';
+            if (icon) {
+              icon.textContent = '▼';
+              icon.classList.add('expanded');
             }
-            
-            const formData = new FormData();
-            formData.append('csv_file', file);
-            formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-            
-            try {
-                showAlert('Uploading...', 'success');
-                
-                const response = await fetch(`/upload-module-kg-csv/{{ module.id }}/`, {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (response.ok) {
-                    showAlert('Uploaded successfully!', 'success');
-                    setTimeout(() => window.location.reload(), 1500);
-                } else {
-                    showAlert('Error uploading file.', 'error');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showAlert('Failed to upload', 'error');
-            }
-            
-            input.value = '';
+          });
+        } else {
+          container.style.display = 'block';
+          if (icon) {
+            icon.textContent = '▼';
+            icon.classList.add('expanded');
+          }
         }
+      }
+    }
 
-        function showAlert(message, type) {
-            const alertBox = document.getElementById('alertBox');
-            alertBox.textContent = message;
-            alertBox.className = `alert alert-${type} show`;
-            
-            setTimeout(() => {
-                alertBox.classList.remove('show');
-            }, 5000);
-        }
-
-        function addRCA() {
-            const list = document.getElementById('rcaList');
-            const item = document.createElement('div');
-            item.className = 'dynamic-item';
-            item.innerHTML = `
-                <input type="text" name="rca_title" placeholder="RCA Title">
-                <textarea name="rca_content" placeholder="RCA Content" rows="3"></textarea>
-                <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
-            `;
-            list.appendChild(item);
-        }
-
-        function addPOS() {
-            const list = document.getElementById('posList');
-            const item = document.createElement('div');
-            item.className = 'dynamic-item';
-            item.innerHTML = `
-                <input type="text" name="pos_name" placeholder="Entity Name">
-                <input type="text" name="pos_reference" placeholder="Reference/Synonym">
-                <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
-            `;
-            list.appendChild(item);
-        }
-
-        function addMetric() {
-            const list = document.getElementById('metricsList');
-            const item = document.createElement('div');
-            item.className = 'dynamic-item';
-            item.innerHTML = `
-                <input type="text" name="metric_name" placeholder="Metric Name">
-                <textarea name="metric_desc" placeholder="Metric Description" rows="2"></textarea>
-                <button type="button" class="remove-btn" onclick="removeItem(this)">Remove</button>
-            `;
-            list.appendChild(item);
-        }
-
-        function removeItem(button) {
-            button.parentElement.remove();
-        }
-
-        document.getElementById('mainForm').addEventListener('submit', function(e) {
-            document.getElementById('selectedColumnsInput').value = JSON.stringify(selectedColumns);
+    // ==================== TABLE/COLUMN SELECTION ====================
+    function onTableNameClick(tableName, event) {
+      event.stopPropagation();
+      
+      const checkbox = document.querySelector('input[name="selected_tables"][value="' + tableName + '"]');
+      
+      if (checkbox && !checkbox.checked) {
+        checkbox.checked = true;
+        loadTableColumns(tableName).then(function() {
+          selectAllColumnsForTable(tableName);
+          toggleTableExpand(tableName);
         });
-    </script>
+      } else {
+        toggleTableExpand(tableName);
+      }
+    }
+
+    function onTableCheckboxChange(checkbox, tableName) {
+      const tableItem = checkbox.closest('.table-item');
+      
+      if (checkbox.checked) {
+        if (tableItem) tableItem.classList.add('selected');
+        loadTableColumns(tableName).then(function() {
+          selectAllColumnsForTable(tableName);
+        });
+      } else {
+        if (tableItem) tableItem.classList.remove('selected');
+        deselectAllColumnsForTable(tableName);
+      }
+    }
+
+    function selectAllColumnsForTable(tableName) {
+      const container = document.getElementById('columns_' + tableName);
+
+      if (!container || !loadedTables.has(tableName)) {
+        loadTableColumns(tableName).then(function() {
+          selectAllColumnsForTable(tableName);
+        });
+        return;
+      }
+
+      const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+      const cols = [];
+
+      checkboxes.forEach(function(cb) {
+        cb.checked = true;
+        cols.push(cb.value);
+      });
+
+      if (cols.length > 0) {
+        selectedColumns[tableName] = Array.from(new Set(cols));
+      }
+
+      const tableCheckbox = document.querySelector('input[name="selected_tables"][value="' + tableName + '"]');
+      if (tableCheckbox) tableCheckbox.checked = true;
+
+      const tableItem = tableCheckbox ? tableCheckbox.closest('.table-item') : null;
+      if (tableItem) tableItem.classList.add('selected');
+
+      syncHiddenInput();
+    }
+
+    function deselectAllColumnsForTable(tableName) {
+      const container = document.getElementById('columns_' + tableName);
+
+      if (container) {
+        container.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+          cb.checked = false;
+        });
+      }
+
+      delete selectedColumns[tableName];
+
+      const tableCheckbox = document.querySelector('input[name="selected_tables"][value="' + tableName + '"]');
+      if (tableCheckbox) tableCheckbox.checked = false;
+
+      const tableItem = tableCheckbox ? tableCheckbox.closest('.table-item') : null;
+      if (tableItem) tableItem.classList.remove('selected');
+
+      syncHiddenInput();
+    }
+
+    function toggleColumn(tableName, columnName, isChecked) {
+      if (!selectedColumns[tableName]) {
+        selectedColumns[tableName] = [];
+      }
+
+      if (isChecked) {
+        if (!selectedColumns[tableName].includes(columnName)) {
+          selectedColumns[tableName].push(columnName);
+        }
+      } else {
+        selectedColumns[tableName] = selectedColumns[tableName].filter(function(c) { return c !== columnName; });
+        if (selectedColumns[tableName].length === 0) {
+          delete selectedColumns[tableName];
+        }
+      }
+
+      const container = document.getElementById('columns_' + tableName);
+      const checkedCount = container ? container.querySelectorAll('input[type="checkbox"]:checked').length : 0;
+      const tableCheckbox = document.querySelector('input[name="selected_tables"][value="' + tableName + '"]');
+
+      if (tableCheckbox) {
+        tableCheckbox.checked = checkedCount > 0;
+        const tableItem = tableCheckbox.closest('.table-item');
+        if (tableItem) {
+          if (checkedCount > 0) {
+            tableItem.classList.add('selected');
+          } else {
+            tableItem.classList.remove('selected');
+          }
+        }
+      }
+
+      syncHiddenInput();
+    }
+
+    // ==================== SELECT/DESELECT ALL ====================
+    document.getElementById('selectAllTablesBtn').addEventListener('click', async function() {
+      const allCheckboxes = document.querySelectorAll('input[name="selected_tables"]');
+
+      for (const cb of allCheckboxes) {
+        if (!cb.checked) {
+          cb.checked = true;
+          const tableItem = cb.closest('.table-item');
+          if (tableItem) tableItem.classList.add('selected');
+          await loadTableColumns(cb.value);
+          selectAllColumnsForTable(cb.value);
+        } else {
+          selectAllColumnsForTable(cb.value);
+        }
+      }
+    });
+
+    document.getElementById('deselectAllTablesBtn').addEventListener('click', function() {
+      document.querySelectorAll('input[name="selected_tables"]').forEach(function(cb) {
+        cb.checked = false;
+        deselectAllColumnsForTable(cb.value);
+      });
+    });
+
+    // ==================== RELATIONSHIP HELPERS ====================
+    async function loadColumnsForRelationship(selectEl, side) {
+      const tableName = selectEl.value;
+      if (!tableName) return;
+
+      const item = selectEl.closest('.relationship-item');
+      const columnSelect = item.querySelector('select[name="rel_' + side + '_column"]');
+      if (!columnSelect) return;
+
+      columnSelect.innerHTML = '<option>Loading...</option>';
+
+      try {
+        let columns = tableColumnsCache[tableName];
+        
+        if (!columns) {
+          const resp = await fetch('/get-table-columns/?table=' + encodeURIComponent(tableName));
+          const data = await resp.json();
+          columns = data.columns || [];
+          tableColumnsCache[tableName] = columns;
+        }
+
+        columnSelect.innerHTML = '<option value="">Select column...</option>';
+        for (const c of columns) {
+          const opt = document.createElement('option');
+          opt.value = c.name;
+          opt.textContent = c.name;
+          columnSelect.appendChild(opt);
+        }
+
+        const savedVal = columnSelect.getAttribute('data-value');
+        if (savedVal) columnSelect.value = savedVal;
+
+      } catch (e) {
+        console.error(e);
+        columnSelect.innerHTML = '<option value="">Error loading</option>';
+      }
+    }
+
+    function addRelationship() {
+      const list = document.getElementById('relationshipsList');
+      const selectedTables = Array.from(document.querySelectorAll('input[name="selected_tables"]:checked')).map(function(cb) { return cb.value; });
+
+      let options = '<option value="">Select table...</option>';
+      for (const t of selectedTables) {
+        options += '<option value="' + t + '">' + t + '</option>';
+      }
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'dynamic-item relationship-item';
+      wrapper.innerHTML = '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:start">' +
+        '<div><label class="muted small">Left Table</label>' +
+        '<select name="rel_left_table" class="rel-select" onchange="loadColumnsForRelationship(this,\'left\')">' + options + '</select>' +
+        '<label class="muted small" style="margin-top:8px;display:block">Column</label>' +
+        '<select name="rel_left_column" class="rel-select rel-column-select"><option value="">Select column...</option></select></div>' +
+        '<div style="text-align:center;padding-top:20px"><label class="muted small">Type</label>' +
+        '<select name="rel_type" class="rel-select" style="width:100px">' +
+        '<option value="one-to-one">1:1</option><option value="one-to-many" selected>1:N</option>' +
+        '<option value="many-to-one">N:1</option><option value="many-to-many">N:N</option></select></div>' +
+        '<div><label class="muted small">Right Table</label>' +
+        '<select name="rel_right_table" class="rel-select" onchange="loadColumnsForRelationship(this,\'right\')">' + options + '</select>' +
+        '<label class="muted small" style="margin-top:8px;display:block">Column</label>' +
+        '<select name="rel_right_column" class="rel-select rel-column-select"><option value="">Select column...</option></select></div></div>' +
+        '<div style="margin-top:10px;text-align:right"><button type="button" class="btn btn-danger small" onclick="this.closest(\'.relationship-item\').remove()">Remove</button></div>';
+      list.appendChild(wrapper);
+    }
+
+    // ==================== DYNAMIC LIST ADDERS ====================
+    function addRCA() {
+      const list = document.getElementById('rcaList');
+      const item = document.createElement('div');
+      item.className = 'dynamic-item';
+      item.innerHTML = '<input type="text" name="rca_title" placeholder="RCA Title" style="margin-bottom:8px">' +
+        '<textarea name="rca_content" placeholder="RCA Content" rows="3"></textarea>' +
+        '<div style="margin-top:8px;text-align:right"><button type="button" class="btn btn-danger small" onclick="this.closest(\'.dynamic-item\').remove()">Remove</button></div>';
+      list.appendChild(item);
+    }
+
+    function addPOS() {
+      const list = document.getElementById('posList');
+      const item = document.createElement('div');
+      item.className = 'dynamic-item';
+      item.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+        '<div><label class="muted small">Entity Name</label><input type="text" name="pos_name" placeholder="e.g., customer_name"></div>' +
+        '<div><label class="muted small">Reference/Synonym</label><input type="text" name="pos_reference" placeholder="e.g., client, buyer"></div></div>' +
+        '<div style="margin-top:8px;text-align:right"><button type="button" class="btn btn-danger small" onclick="this.closest(\'.dynamic-item\').remove()">Remove</button></div>';
+      list.appendChild(item);
+    }
+
+    function addMetric() {
+      const list = document.getElementById('metricsList');
+      const item = document.createElement('div');
+      item.className = 'dynamic-item';
+      item.innerHTML = '<div style="display:grid;grid-template-columns:1fr 2fr;gap:12px">' +
+        '<div><label class="muted small">Metric Name</label><input type="text" name="metric_name" placeholder="e.g., revenue"></div>' +
+        '<div><label class="muted small">Description / Formula</label><textarea name="metric_desc" rows="2" placeholder="e.g., SUM(amount) - total revenue"></textarea></div></div>';
+      list.appendChild(item);
+    }
+
+    // ==================== SAVE FUNCTION ====================
+    async function saveAllChanges() {
+      const saveBtn = document.getElementById('saveAllBtn');
+      const statusText = document.getElementById('statusText');
+      const form = document.getElementById('mainForm');
+      const loadingOverlay = document.getElementById('loadingOverlay');
+      const runAiCheckbox = document.getElementById('runAiCheckbox');
+      const originalText = saveBtn.innerHTML;
+
+      try {
+        saveBtn.disabled = true;
+        
+        // Check if AI should run
+        const runAi = runAiCheckbox.checked;
+        document.getElementById('runAiInput').value = runAi ? 'true' : 'false';
+        
+        if (runAi) {
+          saveBtn.innerHTML = '🤖 Running AI...';
+          loadingOverlay.style.display = 'flex';
+        } else {
+          saveBtn.innerHTML = '⏳ Saving...';
+        }
+        
+        if (statusText) statusText.textContent = runAi ? 'Generating AI descriptions...' : 'Saving changes...';
+
+        // Sync selected columns
+        syncHiddenInput();
+
+        // Ensure action is set
+        let actionInput = form.querySelector('input[name="action"]');
+        if (!actionInput) {
+          actionInput = document.createElement('input');
+          actionInput.type = 'hidden';
+          actionInput.name = 'action';
+          form.appendChild(actionInput);
+        }
+        actionInput.value = 'save_all';
+
+        // Submit via fetch
+        const fd = new FormData(form);
+        const csrf = document.querySelector('[name="csrfmiddlewaretoken"]');
+        if (csrf && !fd.has('csrfmiddlewaretoken')) {
+          fd.append('csrfmiddlewaretoken', csrf.value);
+        }
+
+        const resp = await fetch(window.location.href, {
+          method: 'POST',
+          body: fd,
+          credentials: 'same-origin'
+        });
+
+        if (!resp.ok && resp.status !== 302) {
+          const text = await resp.text();
+          console.error('Save failed:', resp.status, text);
+          alert('Failed to save. Please check the console for details.');
+          saveBtn.innerHTML = '❌ Error';
+          if (statusText) statusText.textContent = 'Error saving';
+          return;
+        }
+
+        saveBtn.innerHTML = '✅ Saved!';
+        if (statusText) statusText.textContent = runAi ? 'AI descriptions generated!' : 'All changes saved!';
+        
+        // Reload to show updated KG with AI-generated descriptions
+        setTimeout(function() { location.reload(); }, 800);
+
+      } catch (e) {
+        console.error('Save error:', e);
+        alert('Error saving: ' + (e.message || e));
+        saveBtn.innerHTML = '❌ Error';
+        if (statusText) statusText.textContent = 'Error saving';
+      } finally {
+        loadingOverlay.style.display = 'none';
+        setTimeout(function() {
+          try {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = originalText;
+          } catch (e) {}
+        }, 2000);
+      }
+    }
+
+    // ==================== INITIALIZATION ====================
+    document.addEventListener('DOMContentLoaded', function() {
+      // Load columns for initially selected tables
+      document.querySelectorAll('input[name="selected_tables"]:checked').forEach(function(cb) {
+        loadTableColumns(cb.value);
+      });
+
+      // Initialize relationship column dropdowns
+      document.querySelectorAll('.relationship-item').forEach(function(item) {
+        const leftTable = item.querySelector('select[name="rel_left_table"]');
+        const rightTable = item.querySelector('select[name="rel_right_table"]');
+        if (leftTable && leftTable.value) {
+          loadColumnsForRelationship(leftTable, 'left');
+        }
+        if (rightTable && rightTable.value) {
+          loadColumnsForRelationship(rightTable, 'right');
+        }
+      });
+
+      // Update summary
+      updateSelectionSummary();
+
+      // Sync form on submit
+      document.getElementById('mainForm').addEventListener('submit', function() {
+        syncHiddenInput();
+      });
+    });
+  </script>
 </body>
 </html>

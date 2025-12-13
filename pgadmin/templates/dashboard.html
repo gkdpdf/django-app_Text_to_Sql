@@ -1,30 +1,32 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Your Modules - PostgreSQL Viewer</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
 
-        @keyframes gradient {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-dark: #11121a;
+            --panel-dark: #1b1d27;
+            --card-dark: #1f2330;
+            --border-dark: #2b2f3c;
+            --text-light: #e6e6e9;
+            --text-muted: #9da1b5;
+            --accent-blue: #4f78ff;
+            --accent-purple: #6c4dff;
+            --danger: #ff4d67;
         }
 
         body {
+            background: var(--bg-dark);
             font-family: 'Poppins', sans-serif;
-            min-height: 100vh;
-            background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #f5576c);
-            background-size: 400% 400%;
-            animation: gradient 15s ease infinite;
+            margin: 0;
             padding: 40px;
+            color: var(--text-light);
         }
 
         .container {
@@ -32,248 +34,175 @@
             margin: 0 auto;
         }
 
-        h1 {
-            color: white;
-            text-align: center;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-        }
-
-        .subtitle {
-            color: rgba(255, 255, 255, 0.9);
-            text-align: center;
-            font-size: 1.1em;
-            margin-bottom: 30px;
-        }
-
-        .top-bar {
+        /* Header */
+        .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 40px;
+            margin-bottom: 32px;
             flex-wrap: wrap;
             gap: 20px;
         }
 
+        .header-title h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .header-title p {
+            color: var(--text-muted);
+            margin-top: 6px;
+        }
+
         .new-btn {
-            background: white;
-            color: #667eea;
-            padding: 12px 30px;
-            border-radius: 15px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            padding: 12px 24px;
+            color: white;
             text-decoration: none;
             font-weight: 600;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            transition: 0.2s;
         }
 
         .new-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+            opacity: 0.85;
         }
 
+        /* Module Cards Grid */
         .modules {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 25px;
+            gap: 22px;
         }
 
         .module-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .module-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            opacity: 0;
-            transition: opacity 0.3s ease;
+            background: var(--card-dark);
+            padding: 28px;
+            border-radius: 18px;
+            border: 1px solid var(--border-dark);
+            box-shadow: 0 4px 18px rgba(0,0,0,0.25);
+            transition: 0.2s ease-in-out;
         }
 
         .module-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 40px rgba(31, 38, 135, 0.2);
+            transform: translateY(-4px);
         }
 
-        .module-card:hover::before {
-            opacity: 1;
-        }
-
-        .module-header {
+        .module-top {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 15px;
+            align-items: center;
         }
 
         .module-name a {
-            color: #667eea;
-            font-weight: 600;
-            font-size: 1.3em;
+            font-size: 1.25rem;
+            font-weight: 700;
             text-decoration: none;
-            transition: color 0.3s ease;
-        }
-
-        .module-name a:hover {
-            color: #764ba2;
+            color: var(--accent-blue);
         }
 
         .delete-btn {
-            background: #f5576c;
-            color: white;
+            background: var(--danger);
             border: none;
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
+            color: white;
+            font-size: 18px;
             cursor: pointer;
-            font-size: 1.1em;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            transition: 0.15s;
         }
 
         .delete-btn:hover {
-            background: #d4455a;
             transform: scale(1.1);
         }
 
         .tables-info {
-            font-size: 0.95em;
-            color: #555;
-            margin-bottom: 20px;
-            line-height: 1.5;
+            margin-top: 18px;
+            color: var(--text-muted);
+            font-size: 0.95rem;
         }
 
-        .tables-info strong {
-            color: #764ba2;
-            font-weight: 600;
-        }
-
+        /* Buttons inside card */
         .button-group {
             display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 20px;
         }
 
-        a.button {
-            display: inline-block;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            text-decoration: none;
-            padding: 10px 20px;
-            border-radius: 12px;
-            transition: all 0.3s ease;
-            font-weight: 500;
-            font-size: 0.95em;
+        .small-btn {
             flex: 1;
             text-align: center;
-            min-width: 120px;
+            padding: 10px 18px;
+            border-radius: 10px;
+            color: white;
+            font-weight: 600;
+            text-decoration: none;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            transition: 0.2s;
         }
 
-        a.button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        .small-btn:hover {
+            opacity: 0.85;
         }
 
+        /* No modules message */
         .no-modules {
+            background: var(--panel-dark);
+            padding: 40px;
+            border-radius: 14px;
             text-align: center;
-            color: white;
-            font-size: 1.2em;
-            margin-top: 100px;
-            padding: 60px 40px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            max-width: 600px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        .error-message {
-            background: rgba(255, 87, 108, 0.9);
-            color: white;
-            padding: 20px;
-            border-radius: 15px;
-            text-align: center;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 15px rgba(255, 87, 108, 0.3);
-        }
-
-        @media (max-width: 768px) {
-            body {
-                padding: 20px;
-            }
-            h1 {
-                font-size: 2em;
-            }
-            .modules {
-                grid-template-columns: 1fr;
-            }
+            margin-top: 50px;
+            border: 1px solid var(--border-dark);
         }
     </style>
 </head>
+
 <body>
     <div class="container">
-        <div class="top-bar">
-            <div>
+        <div class="header">
+            <div class="header-title">
                 <h1>Welcome, {{ user_name|title }}! 👋</h1>
-                <p class="subtitle">Manage your PostgreSQL modules with ease</p>
+                <p>Manage your modules, edit knowledge graphs & explore your data.</p>
             </div>
             <a href="{% url 'new_module' %}" class="new-btn">+ Create New Module</a>
         </div>
-
-        {% if error %}
-            <div class="error-message">
-                ⚠️ {{ error }}
-            </div>
-        {% endif %}
 
         {% if modules %}
             <div class="modules">
                 {% for module in modules %}
                     <div class="module-card">
-                        <div class="module-header">
+                        <div class="module-top">
                             <div class="module-name">
-                                <a href="{% url 'chat_module' module.id %}">
-                                    📊 {{ module.name }}
-                                </a>
+                                <a href="{% url 'chat_module' module.id %}">{{ module.name }}</a>
                             </div>
-                            <button class="delete-btn" onclick="deleteModule({{ module.id }}, '{{ module.name|escapejs }}')" title="Delete Module">
-                                ×
-                            </button>
+
+                            <button class="delete-btn" onclick="deleteModule({{ module.id }}, '{{ module.name|escapejs }}')">×</button>
                         </div>
+
                         <div class="tables-info">
-                            <strong>📁 Tables:</strong><br>
-                            {% if module.tables and module.tables|length > 0 %}
+                            <strong>📁 Tables</strong><br>
+                            {% if module.tables %}
                                 {{ module.tables|length }} table{{ module.tables|length|pluralize }} selected
                             {% else %}
                                 <em>No tables selected</em>
                             {% endif %}
                         </div>
+
                         <div class="button-group">
-                            <a href="{% url 'edit_module' module.id %}" class="button">✏️ Edit</a>
-                            <a href="{% url 'chat_module' module.id %}" class="button">💬 Chat</a>
+                            <a href="{% url 'edit_module' module.id %}" class="small-btn">✏️ Edit</a>
+                            <a href="{% url 'chat_module' module.id %}" class="small-btn">💬 Chat</a>
                         </div>
                     </div>
                 {% endfor %}
             </div>
         {% else %}
             <div class="no-modules">
-                <p>🚀 No modules created yet.</p>
-                <p>Click "+ Create New Module" to start building your first module!</p>
+                <h2>No modules created yet</h2>
+                <p>Start by creating your first module!</p>
+                <br>
+                <a href="{% url 'new_module' %}" class="new-btn">+ Create Module</a>
             </div>
         {% endif %}
     </div>
@@ -281,47 +210,32 @@
     <script>
         function getCookie(name) {
             let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
+            if (document.cookie) {
                 const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
+                for (let cookie of cookies) {
+                    cookie = cookie.trim();
+                    if (cookie.startsWith(name + '=')) {
+                        cookieValue = cookie.split('=')[1];
                     }
                 }
             }
             return cookieValue;
         }
 
-        async function deleteModule(moduleId, moduleName) {
-            if (!confirm(`Are you sure you want to delete "${moduleName}"?\n\nThis action cannot be undone.`)) {
-                return;
-            }
+        async function deleteModule(id, name) {
+            if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
 
             const csrftoken = getCookie('csrftoken');
 
-            try {
-                const response = await fetch(`/delete-module/${moduleId}/`, {
-                    method: 'DELETE',
-                    headers: {
-                        'X-CSRFToken': csrftoken,
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'same-origin'
-                });
+            const res = await fetch(`/delete-module/${id}/`, {
+                method: 'DELETE',
+                headers: { "X-CSRFToken": csrftoken },
+                credentials: "same-origin"
+            });
 
-                const data = await response.json();
-
-                if (response.ok && data.success) {
-                    location.reload();
-                } else {
-                    alert('Error: ' + (data.error || 'Unknown error'));
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Failed to delete module. Please try again.');
-            }
+            const data = await res.json();
+            if (data.success) location.reload();
+            else alert("Error deleting module.");
         }
     </script>
 </body>
