@@ -891,42 +891,51 @@ def chat_view(request, module_id):
     module = get_object_or_404(Module, id=module_id, user_name=user_name)
     return render(request, "chat.html", {"module": module, "module_id": module_id, "user_name": user_name})
 
-
 @csrf_exempt
 def chat_api(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=405)
+
     try:
-        data = json.loads(request.body)
-        user_message = data.get("message", "").strip()
-        conversation_id = data.get("conversation_id")
-        module_id = data.get("module_id")
-        feedback = data.get("feedback")
-        context_settings = data.get("context_settings")
+        payload = json.loads(request.body or "{}")
+
+        user_message = (payload.get("message") or "").strip()
+        conversation_id = payload.get("conversation_id")
+        module_id = payload.get("module_id")
+        feedback = payload.get("feedback")
+        context_settings = payload.get("context_settings", {})
+
         if not module_id:
             return JsonResponse({"error": "module_id required"}, status=400)
+
         user_name = request.session.get("user_name")
         if not user_name:
             return JsonResponse({"error": "Not authenticated"}, status=401)
 
+        module = get_object_or_404(Module, id=module_id, user_name=user_name)
+
         conversation = None
         if conversation_id:
-            try:
-                conversation = Conversation.objects.get(id=conversation_id)
-            except Conversation.DoesNotExist:
-                conversation = None
-        module = get_object_or_404(Module, id=module_id, user_name=user_name)
+            conversation = Conversation.objects.filter(id=conversation_id, module=module).first()
+
         if not conversation:
             conversation = Conversation.objects.create(
                 module=module,
                 session_id=f"conv_{Conversation.objects.filter(module=module).count() + 1}",
                 title=user_message[:50] if user_message else "New Chat"
             )
+
         session_data = conversation.context or {"entities": {}, "history": []}
+
         if user_message:
-            Message.objects.create(conversation=conversation, content=user_message, is_user=True)
+            Message.objects.create(
+                conversation=conversation,
+                content=user_message,
+                is_user=True
+            )
 
         from pgadmin.RAG_LLM.main import invoke_graph
+
         result = invoke_graph(
             user_query=user_message,
             module_id=module_id,
@@ -937,36 +946,93 @@ def chat_api(request):
 
         updated_session_data = result.get("session_data", session_data)
         conversation.context = updated_session_data
+
         if conversation.messages.count() == 1 and user_message:
             conversation.title = user_message[:50]
+
         conversation.save()
 
-        response_data = {"conversation_id": conversation.id, "type": result.get("type", "response")}
-        if result.get("needs_clarification"):
-            response_data.update({
-                "message": result.get("message"),
-                "options": result.get("options", []),
-                "session_data": updated_session_data
-            })
-            return JsonResponse(response_data)
+        # 🔍 DEBUG (TEMP – KEEP UNTIL STABLE)
+        logger.warning("RAG RESULT KEYS: %s", list(result.keys()))
+        logger.warning("RAG RESULT TYPE: %s", result.get("type"))
+        logger.warning("RAG needs_clarification: %s", result.get("needs_clarification"))
 
+        response = {
+            "conversation_id": conversation.id,
+            "session_data": updated_session_data
+        }
+
+        # ==================================================
+        # ✅ CLARIFICATION — FINAL & SAFE
+        # ==================================================
+        if result.get("type") == "clarification":
+            response.update({
+                "type": "clarification",
+                "message": result.get("message", "Please clarify"),
+                "options": result.get("options", []),
+                "subtype": result.get("subtype"),
+                "entity": result.get("entity"),
+                "entity_type": result.get("entity_type"),
+                "clarification_context": result.get("clarification_context"),
+                "allow_custom": bool(result.get("allow_custom", False))
+            })
+            return JsonResponse(response)
+
+        # ==================================================
+        # ✅ NORMAL RESPONSE
+        # ==================================================
         if result.get("type") == "response":
             assistant_message = result.get("message", "OK")
-            Message.objects.create(conversation=conversation, content=assistant_message, is_user=False,
-                                   metadata={"sql": result.get("sql"), "data": result.get("data"), "chart": result.get("chart")})
-            response_data.update({"message": assistant_message, "sql": result.get("sql"), "data": result.get("data"), "chart": result.get("chart"), "session_data": updated_session_data})
-            return JsonResponse(response_data)
 
-        elif result.get("type") == "error":
+            Message.objects.create(
+                conversation=conversation,
+                content=assistant_message,
+                is_user=False,
+                metadata={
+                    "sql": result.get("sql"),
+                    "data": result.get("data"),
+                    "chart": result.get("chart")
+                }
+            )
+
+            response.update({
+                "type": "response",
+                "message": assistant_message,
+                "sql": result.get("sql"),
+                "data": result.get("data"),
+                "chart": result.get("chart")
+            })
+            return JsonResponse(response)
+
+        # ==================================================
+        # ❌ ERROR
+        # ==================================================
+        if result.get("type") == "error":
             error_msg = result.get("message", "Error")
             Message.objects.create(conversation=conversation, content=error_msg, is_user=False)
-            response_data.update({"message": error_msg, "session_data": updated_session_data})
-            return JsonResponse(response_data)
+            return JsonResponse({
+                "conversation_id": conversation.id,
+                "type": "error",
+                "message": error_msg,
+                "session_data": updated_session_data
+            })
 
-        return JsonResponse({"message": "No response from LLM", "session_data": updated_session_data})
+        # ==================================================
+        # 🚨 HARD FAIL (NO SILENT FALLBACK)
+        # ==================================================
+        logger.error("Unhandled RAG response: %s", result)
+
+        return JsonResponse({
+            "conversation_id": conversation.id,
+            "type": "error",
+            "message": "Invalid response from AI engine",
+            "session_data": updated_session_data
+        })
+
     except Exception as e:
-        logger.exception("chat_api error")
+        logger.exception("chat_api failed")
         return JsonResponse({"error": str(e)}, status=500)
+
 
 
 @csrf_exempt
