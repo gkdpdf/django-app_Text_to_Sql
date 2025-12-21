@@ -66,7 +66,6 @@ def _get_sample_data(table_name, limit=3):
             cursor.execute(f'SELECT * FROM "{table_name}" LIMIT %s', [limit])
             columns = [col[0] for col in cursor.description]
             rows = cursor.fetchall()
-            # Convert to serializable format
             serializable_rows = []
             for row in rows:
                 serializable_row = []
@@ -144,17 +143,12 @@ def _merge_kg_with_selection(existing_kg, selected_tables, selected_columns):
 # AI Description Generation Functions
 # --------------------
 def _generate_kg_descriptions_with_ai(kg_data, selected_columns):
-    """
-    Use AI (LLM) to generate descriptions for tables and columns with empty descriptions.
-    Returns updated kg_data with AI-generated descriptions.
-    """
+    """Use AI to generate descriptions for tables and columns with empty descriptions."""
     import os
     
-    # Collect items that need descriptions
     items_to_describe = []
     
     for table, cols in kg_data.items():
-        # Check table description
         table_info = cols.get("TABLE_INFO", {})
         if not table_info.get("desc", "").strip():
             sample = _get_sample_data(table, limit=3)
@@ -166,7 +160,6 @@ def _generate_kg_descriptions_with_ai(kg_data, selected_columns):
                 "sample_data": sample
             })
         
-        # Check column descriptions
         for col_name, col_info in cols.items():
             if col_name == "TABLE_INFO":
                 continue
@@ -179,20 +172,14 @@ def _generate_kg_descriptions_with_ai(kg_data, selected_columns):
                 })
     
     if not items_to_describe:
-        logger.info("No empty descriptions to fill")
         return kg_data
     
-    logger.info(f"Generating AI descriptions for {len(items_to_describe)} items")
-    
-    # Build prompt for AI
     prompt = _build_kg_generation_prompt(items_to_describe)
     
-    # Call LLM
     try:
         ai_response = _call_llm_for_kg(prompt)
         if ai_response:
             kg_data = _parse_and_apply_ai_descriptions(kg_data, ai_response)
-            logger.info("Successfully generated AI descriptions")
     except Exception as e:
         logger.exception("Error generating AI descriptions: %s", e)
     
@@ -201,53 +188,22 @@ def _generate_kg_descriptions_with_ai(kg_data, selected_columns):
 
 def _build_kg_generation_prompt(items_to_describe):
     """Build a prompt for the LLM to generate KG descriptions"""
-    
     prompt = """You are a database documentation expert. Generate clear, concise descriptions for the following database tables and columns.
 
-For each item, provide a brief but informative description that explains:
-- For tables: What data the table stores and its purpose (1-2 sentences)
-- For columns: What the column represents, its meaning, and any relevant details (1 sentence)
-
-IMPORTANT: Respond ONLY with valid JSON in this exact format, no other text:
+IMPORTANT: Respond ONLY with valid JSON in this exact format:
 {
-    "tables": {
-        "table_name": "description of the table"
-    },
-    "columns": {
-        "table_name.column_name": "description of the column"
-    }
+    "tables": {"table_name": "description"},
+    "columns": {"table_name.column_name": "description"}
 }
 
-Here are the items that need descriptions:
-
+Items to describe:
 """
-    
-    tables_section = []
-    columns_section = []
     
     for item in items_to_describe:
         if item["type"] == "table":
-            table_info = f"TABLE: {item['table']}\n"
-            table_info += f"  Columns: {', '.join(item['columns'][:15])}"  # Limit columns shown
-            if len(item['columns']) > 15:
-                table_info += f" (and {len(item['columns']) - 15} more)"
-            table_info += "\n"
-            if item.get("sample_data", {}).get("rows"):
-                # Show limited sample data
-                sample_preview = str(item['sample_data']['rows'][:2])[:200]
-                table_info += f"  Sample data: {sample_preview}...\n"
-            tables_section.append(table_info)
+            prompt += f"\nTABLE: {item['table']} (Columns: {', '.join(item['columns'][:10])})"
         else:
-            col_info = f"COLUMN: {item['table']}.{item['column']} (datatype: {item['datatype']})"
-            columns_section.append(col_info)
-    
-    if tables_section:
-        prompt += "TABLES TO DESCRIBE:\n" + "\n".join(tables_section) + "\n\n"
-    
-    if columns_section:
-        prompt += "COLUMNS TO DESCRIBE:\n" + "\n".join(columns_section) + "\n\n"
-    
-    prompt += "Generate descriptions for ALL items above. Respond with JSON only."
+            prompt += f"\nCOLUMN: {item['table']}.{item['column']} ({item['datatype']})"
     
     return prompt
 
@@ -263,9 +219,7 @@ def _call_llm_for_kg(prompt):
         return _call_anthropic(prompt, anthropic_key)
     elif openai_key:
         return _call_openai(prompt, openai_key)
-    else:
-        logger.warning("No LLM API key found. Set OPENAI_API_KEY or ANTHROPIC_API_KEY")
-        return None
+    return None
 
 
 def _call_anthropic(prompt, api_key):
@@ -281,9 +235,7 @@ def _call_anthropic(prompt, api_key):
     data = {
         "model": "claude-3-haiku-20240307",
         "max_tokens": 4096,
-        "messages": [
-            {"role": "user", "content": prompt}
-        ]
+        "messages": [{"role": "user", "content": prompt}]
     }
     
     try:
@@ -313,7 +265,7 @@ def _call_openai(prompt, api_key):
     data = {
         "model": "gpt-3.5-turbo",
         "messages": [
-            {"role": "system", "content": "You are a database documentation expert. Always respond with valid JSON only."},
+            {"role": "system", "content": "Database documentation expert. Respond with valid JSON only."},
             {"role": "user", "content": prompt}
         ],
         "max_tokens": 4096,
@@ -340,15 +292,12 @@ def _parse_and_apply_ai_descriptions(kg_data, ai_response):
     import re
     
     try:
-        # Try to extract JSON from response
         json_match = re.search(r'\{[\s\S]*\}', ai_response)
         if not json_match:
-            logger.warning("No JSON found in AI response")
             return kg_data
         
         ai_data = json.loads(json_match.group())
         
-        # Apply table descriptions
         tables_desc = ai_data.get("tables", {})
         for table_name, desc in tables_desc.items():
             if table_name in kg_data:
@@ -357,7 +306,6 @@ def _parse_and_apply_ai_descriptions(kg_data, ai_response):
                 if not kg_data[table_name]["TABLE_INFO"].get("desc", "").strip():
                     kg_data[table_name]["TABLE_INFO"]["desc"] = desc.strip()
         
-        # Apply column descriptions
         columns_desc = ai_data.get("columns", {})
         for full_col_name, desc in columns_desc.items():
             parts = full_col_name.split(".", 1)
@@ -369,9 +317,6 @@ def _parse_and_apply_ai_descriptions(kg_data, ai_response):
         
         return kg_data
         
-    except json.JSONDecodeError as e:
-        logger.warning("Failed to parse AI response as JSON: %s", e)
-        return kg_data
     except Exception as e:
         logger.exception("Error applying AI descriptions: %s", e)
         return kg_data
@@ -436,7 +381,6 @@ def new_module_view(request):
             if not isinstance(selected_columns, dict):
                 selected_columns = {}
         except Exception as e:
-            logger.warning("Invalid selected_columns JSON: %s", e)
             selected_columns = {}
 
         if not module_name:
@@ -466,7 +410,6 @@ def new_module_view(request):
                 knowledge_graph_data=initial_kg
             )
             
-            logger.info("Created module id=%s name=%s", module.id, module.name)
             return redirect("edit_module", module_id=module.id)
             
         except Exception as e:
@@ -508,7 +451,6 @@ def edit_module_view(request, module_id):
     if request.method == "POST":
         action = request.POST.get("action")
 
-        # ===== save_all with optional AI generation =====
         if action == "save_all":
             selected_tables = request.POST.getlist("selected_tables")
             selected_columns_json = request.POST.get("selected_columns", "{}")
@@ -521,13 +463,9 @@ def edit_module_view(request, module_id):
             except:
                 selected_columns = {}
 
-            selected_tables = selected_tables or []
-            selected_columns = selected_columns or {}
+            module.tables = selected_tables or []
+            module.selected_columns = selected_columns or {}
 
-            module.tables = selected_tables
-            module.selected_columns = selected_columns
-
-            # Build KG from posted form fields
             posted_kg = {}
             for key, val in request.POST.items():
                 if key.startswith("table_info__"):
@@ -558,10 +496,8 @@ def edit_module_view(request, module_id):
                                 posted_kg[table].setdefault(column, {})
                                 posted_kg[table][column]["datatype"] = val.strip()
 
-            # Merge with selection
             final_kg = _merge_kg_with_selection(posted_kg, selected_tables, selected_columns)
             
-            # Preserve user-entered descriptions
             for table in posted_kg:
                 if table in final_kg:
                     for col, data in posted_kg[table].items():
@@ -571,14 +507,12 @@ def edit_module_view(request, module_id):
                             if data.get("datatype"):
                                 final_kg[table][col]["datatype"] = data["datatype"]
 
-            # Run AI to fill blank descriptions if requested
             if run_ai:
-                logger.info("Running AI to fill blank descriptions...")
                 final_kg = _generate_kg_descriptions_with_ai(final_kg, selected_columns)
 
             module.knowledge_graph_data = final_kg
 
-            # Save relationships
+            # Relationships
             relationships = []
             rel_left_tables = request.POST.getlist("rel_left_table")
             rel_left_columns = request.POST.getlist("rel_left_column")
@@ -630,15 +564,12 @@ def edit_module_view(request, module_id):
                     metrics_data[metric_names[i].strip()] = metric_descs[i].strip() if i < len(metric_descs) else ""
             module.metrics_data = metrics_data
 
-            # Extra suggestions
             module.extra_suggestions = request.POST.get("extra_suggestions", "").strip()
-
             module.save()
             
-            logger.info("Saved module %s (run_ai=%s)", module.id, run_ai)
             return redirect("edit_module", module_id=module.id)
 
-    # GET: prepare template data
+    # GET
     selected_tables = module.tables or []
     selected_columns = module.selected_columns if isinstance(module.selected_columns, dict) else {}
 
@@ -685,12 +616,11 @@ def edit_module_view(request, module_id):
 
 
 # --------------------
-# Generate KG API (AJAX endpoint)
+# Generate KG API
 # --------------------
 @csrf_exempt
 @require_http_methods(["POST"])
 def generate_kg_api(request, module_id):
-    """AJAX endpoint to generate AI descriptions for empty KG fields."""
     user_name = request.session.get("user_name")
     if not user_name:
         return JsonResponse({"error": "Not authenticated"}, status=401)
@@ -732,17 +662,15 @@ def delete_module_view(request, module_id):
         module = Module.objects.get(id=module_id, user_name=user_name)
         name = module.name
         module.delete()
-        logger.info("Deleted module %s id=%s", name, module_id)
         return JsonResponse({"success": True, "message": f"Deleted {name}"})
     except Module.DoesNotExist:
         return JsonResponse({"error": "Module not found"}, status=404)
     except Exception as e:
-        logger.exception("Error deleting module")
         return JsonResponse({"error": str(e)}, status=500)
 
 
 # --------------------
-# Utilities: get_table_columns
+# Utilities
 # --------------------
 @csrf_exempt
 def get_table_columns_view(request):
@@ -753,12 +681,11 @@ def get_table_columns_view(request):
         columns = _get_table_columns(table_name)
         return JsonResponse({"columns": columns})
     except Exception as e:
-        logger.exception("Error loading columns for %s", table_name)
         return JsonResponse({"error": str(e)}, status=500)
 
 
 # --------------------
-# Download / Upload per-module KG CSV
+# Download / Upload KG CSV
 # --------------------
 def download_module_kg_csv(request, module_id):
     user_name = request.session.get("user_name")
@@ -809,7 +736,7 @@ def upload_module_kg_csv(request, module_id):
 
 
 # --------------------
-# Global (legacy) KG views
+# Global KG views (legacy)
 # --------------------
 def knowledge_graph_view(request):
     kg_inst, _ = KnowledgeGraph.objects.get_or_create(id=1)
@@ -882,7 +809,7 @@ def upload_knowledge_graph(request):
 
 
 # --------------------
-# Chat & Conversation helpers
+# Chat View
 # --------------------
 def chat_view(request, module_id):
     user_name = request.session.get("user_name")
@@ -891,6 +818,10 @@ def chat_view(request, module_id):
     module = get_object_or_404(Module, id=module_id, user_name=user_name)
     return render(request, "chat.html", {"module": module, "module_id": module_id, "user_name": user_name})
 
+
+# ==================================================
+# 🚀 CHAT API - MAIN ENDPOINT
+# ==================================================
 @csrf_exempt
 def chat_api(request):
     if request.method != "POST":
@@ -914,6 +845,7 @@ def chat_api(request):
 
         module = get_object_or_404(Module, id=module_id, user_name=user_name)
 
+        # Get or create conversation
         conversation = None
         if conversation_id:
             conversation = Conversation.objects.filter(id=conversation_id, module=module).first()
@@ -925,8 +857,42 @@ def chat_api(request):
                 title=user_message[:50] if user_message else "New Chat"
             )
 
+        # Load session data from conversation context
         session_data = conversation.context or {"entities": {}, "history": []}
 
+        # === PROTECTION: If user sends a new message, ignore stale feedback ===
+        if user_message and feedback:
+            # New query with feedback = user typed new question while clarification was pending
+            # Treat as new query, ignore the feedback
+            logger.info("New message with stale feedback - treating as new query")
+            feedback = None
+
+        # === PROTECTION: Validate feedback has required context ===
+        if feedback and not user_message:
+            feedback_type = feedback.get('type')
+            
+            # Check if we have the required session context for this feedback
+            if feedback_type == 'value_selection':
+                if 'last_clarification' not in session_data and not feedback.get('clarification_context', {}).get('table'):
+                    logger.warning("Stale value_selection feedback - missing context")
+                    return JsonResponse({
+                        "conversation_id": conversation.id,
+                        "type": "error",
+                        "message": "Session expired. Please ask your question again.",
+                        "session_data": {}
+                    })
+            
+            if feedback_type == 'column_selection':
+                if 'last_matches_by_column' not in session_data and not feedback.get('clarification_context', {}).get('matches_by_column'):
+                    logger.warning("Stale column_selection feedback - missing context")
+                    return JsonResponse({
+                        "conversation_id": conversation.id,
+                        "type": "error",
+                        "message": "Session expired. Please ask your question again.",
+                        "session_data": {}
+                    })
+
+        # Save user message
         if user_message:
             Message.objects.create(
                 conversation=conversation,
@@ -934,6 +900,7 @@ def chat_api(request):
                 is_user=True
             )
 
+        # Call RAG engine
         from pgadmin.RAG_LLM.main import invoke_graph
 
         result = invoke_graph(
@@ -944,26 +911,27 @@ def chat_api(request):
             context_settings=context_settings
         )
 
+        # Update session data
         updated_session_data = result.get("session_data", session_data)
         conversation.context = updated_session_data
 
+        # Update conversation title
         if conversation.messages.count() == 1 and user_message:
             conversation.title = user_message[:50]
 
         conversation.save()
 
-        # 🔍 DEBUG (TEMP – KEEP UNTIL STABLE)
-        logger.warning("RAG RESULT KEYS: %s", list(result.keys()))
-        logger.warning("RAG RESULT TYPE: %s", result.get("type"))
-        logger.warning("RAG needs_clarification: %s", result.get("needs_clarification"))
+        # Debug logging
+        logger.info("RAG RESULT TYPE: %s", result.get("type"))
 
+        # Build response
         response = {
             "conversation_id": conversation.id,
             "session_data": updated_session_data
         }
 
         # ==================================================
-        # ✅ CLARIFICATION — FINAL & SAFE
+        # ✅ CLARIFICATION RESPONSE
         # ==================================================
         if result.get("type") == "clarification":
             response.update({
@@ -1005,7 +973,7 @@ def chat_api(request):
             return JsonResponse(response)
 
         # ==================================================
-        # ❌ ERROR
+        # ❌ ERROR RESPONSE
         # ==================================================
         if result.get("type") == "error":
             error_msg = result.get("message", "Error")
@@ -1018,10 +986,9 @@ def chat_api(request):
             })
 
         # ==================================================
-        # 🚨 HARD FAIL (NO SILENT FALLBACK)
+        # 🚨 FALLBACK
         # ==================================================
-        logger.error("Unhandled RAG response: %s", result)
-
+        logger.error("Unhandled RAG response type: %s", result.get("type"))
         return JsonResponse({
             "conversation_id": conversation.id,
             "type": "error",
@@ -1034,7 +1001,9 @@ def chat_api(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-
+# --------------------
+# Conversation Management
+# --------------------
 @csrf_exempt
 def get_conversations(request):
     if request.method != "GET":
@@ -1046,7 +1015,12 @@ def get_conversations(request):
         convs = Conversation.objects.filter(module_id=module_id).order_by("-updated_at")[:50]
         out = []
         for c in convs:
-            out.append({"id": c.id, "title": c.title, "updated_at": c.updated_at.isoformat(), "message_count": c.messages.count()})
+            out.append({
+                "id": c.id, 
+                "title": c.title, 
+                "updated_at": c.updated_at.isoformat(), 
+                "message_count": c.messages.count()
+            })
         return JsonResponse({"conversations": out})
     except Exception as e:
         logger.exception("get_conversations error")
@@ -1061,8 +1035,16 @@ def load_conversation(request, conversation_id):
         conv = Conversation.objects.get(id=conversation_id)
         msgs = []
         for m in conv.messages.all():
-            msgs.append({"content": m.content, "is_user": m.is_user, "timestamp": m.timestamp.isoformat(), "metadata": getattr(m, "metadata", {})})
-        return JsonResponse({"conversation": {"id": conv.id, "title": conv.title, "context": conv.context}, "messages": msgs})
+            msgs.append({
+                "content": m.content, 
+                "is_user": m.is_user, 
+                "timestamp": m.timestamp.isoformat(), 
+                "metadata": getattr(m, "metadata", {})
+            })
+        return JsonResponse({
+            "conversation": {"id": conv.id, "title": conv.title, "context": conv.context}, 
+            "messages": msgs
+        })
     except Conversation.DoesNotExist:
         return JsonResponse({"error": "Conversation not found"}, status=404)
     except Exception as e:
