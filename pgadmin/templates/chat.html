@@ -88,6 +88,21 @@
         .send-btn{position:absolute;right:10px;bottom:8px;width:36px;height:36px;background:#19c37d;border:none;border-radius:8px;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
         .send-btn:disabled{background:#565869;cursor:not-allowed}
 
+        /* Loading spinner */
+        .loading-indicator{display:none;align-items:center;gap:10px;padding:12px 20px}
+        .loading-indicator.show{display:flex}
+        .loading-spinner{width:24px;height:24px;border:3px solid #565869;border-top-color:#19c37d;border-radius:50%;animation:spin 0.8s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .loading-text{color:#b9bbca;font-size:14px}
+        
+        .message-loading{display:flex;align-items:center;gap:10px;padding:8px 0}
+        .typing-dots{display:flex;gap:4px}
+        .typing-dots span{width:8px;height:8px;background:#19c37d;border-radius:50%;animation:bounce 1.4s ease-in-out infinite}
+        .typing-dots span:nth-child(1){animation-delay:0s}
+        .typing-dots span:nth-child(2){animation-delay:0.2s}
+        .typing-dots span:nth-child(3){animation-delay:0.4s}
+        @keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}
+
         ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:#202123}::-webkit-scrollbar-thumb{background:#565869;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#686b79}
         @media(max-width:768px){.sidebar{display:none}.message{max-width:100%;padding:0 8px}}
     </style>
@@ -181,6 +196,11 @@
             </div>
 
             <div class="input-container">
+                <!-- Loading indicator -->
+                <div class="loading-indicator" id="loadingIndicator">
+                    <div class="loading-spinner"></div>
+                    <span class="loading-text">Thinking...</span>
+                </div>
                 <div class="input-wrapper">
                     <textarea id="messageInput" class="input-box" placeholder="Send a message..." rows="1" onkeydown="handleKeyPress(event)"></textarea>
                     <button class="send-btn" id="sendBtn" onclick="sendMessage()">
@@ -202,6 +222,48 @@
     // === REQUEST LOCKING ===
     let isRequestInProgress = false;
     let enterKeyHandler = null;
+
+    // === LOADING INDICATOR ===
+    function showLoading(){
+        const indicator = document.getElementById('loadingIndicator');
+        if(indicator) indicator.classList.add('show');
+        
+        // Also add typing indicator in messages
+        const container = document.getElementById('messagesContainer');
+        const existingTyping = document.getElementById('typingIndicator');
+        if(existingTyping) existingTyping.remove();
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'message-wrapper';
+        wrapper.id = 'typingIndicator';
+        wrapper.innerHTML = `
+            <div class="message assistant-message">
+                <div class="message-header">
+                    <div class="avatar assistant-avatar">🤖</div>
+                    <strong>Assistant</strong>
+                </div>
+                <div class="message-content">
+                    <div class="message-loading">
+                        <div class="typing-dots">
+                            <span></span><span></span><span></span>
+                        </div>
+                        <span style="color:#b9bbca;font-size:13px">Analyzing your query...</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(wrapper);
+        container.scrollTop = container.scrollHeight;
+    }
+    
+    function hideLoading(){
+        const indicator = document.getElementById('loadingIndicator');
+        if(indicator) indicator.classList.remove('show');
+        
+        // Remove typing indicator
+        const typing = document.getElementById('typingIndicator');
+        if(typing) typing.remove();
+    }
 
     function toggleContextPanel(){
         const content = document.getElementById('contextContent');
@@ -326,6 +388,9 @@
         input.value=''; 
         input.style.height='auto';
         
+        // Show loading indicator
+        showLoading();
+        
         try{
             const ctx = getContextSettings();
             const resp = await fetch('/chat/api/', { 
@@ -345,9 +410,13 @@
             });
             if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json(); 
+            
+            // Hide loading before handling response
+            hideLoading();
             handleResponse(data);
         }catch(err){ 
             console.error(err); 
+            hideLoading();
             appendMessage('assistant','❌ Sorry, something went wrong.'); 
         }
         finally{ 
@@ -468,6 +537,7 @@
                 searchBtn.disabled = true;
                 
                 appendMessage('user', `Searching for: ${val}`);
+                showLoading();
                 
                 const feedback = { 
                     type:'custom_value', 
@@ -494,11 +564,13 @@
                 })
                 .then(resp=>resp.json())
                 .then(data=>{
+                    hideLoading();
                     isRequestInProgress = false;
                     handleResponse(data);
                 })
                 .catch(err=>{ 
                     console.error(err); 
+                    hideLoading();
                     isRequestInProgress = false;
                     appendMessage('assistant','❌ Search failed.'); 
                     input.disabled=false; 
@@ -616,6 +688,9 @@
             : selectedValues.join(', ');
         
         appendMessage('user', `Selected: ${selectionText}`);
+        
+        // Show loading
+        showLoading();
 
         const feedback = {
             type: pendingClarification?.subtype,
@@ -646,11 +721,13 @@
             if(!resp.ok) throw new Error(`HTTP ${resp.status}`); 
             const data = await resp.json(); 
             
-            // Unlock before handling response
+            // Hide loading and unlock before handling response
+            hideLoading();
             isRequestInProgress = false;
             handleResponse(data);
         } catch(err){ 
             console.error(err); 
+            hideLoading();
             isRequestInProgress = false;
             appendMessage('assistant','❌ Error processing selection.'); 
         }
