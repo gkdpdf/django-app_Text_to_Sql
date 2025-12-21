@@ -534,8 +534,11 @@ def entity_resolver(user_query, catalog, session_data, feedback=None, module_id=
     # === INITIAL QUERY - LLM Entity Extraction ===
     query_for_extraction = user_query if user_query else session_data.get('original_user_query', '')
     
-    # Apply POS tagging to expand query with aliases
-    pos_tagging = config.get('pos_tagging', [])
+    # Apply POS tagging to expand query with aliases (only if POS is enabled)
+    context_settings = session_data.get('context_settings', {})
+    use_pos = context_settings.get('use_pos', False)
+    
+    pos_tagging = config.get('pos_tagging', []) if use_pos else []
     expanded_query = query_for_extraction
     if pos_tagging:
         for pos in pos_tagging:
@@ -725,18 +728,21 @@ def generate_sql_with_llm(user_query, entities, config, intent="total", temporal
     use_kg = context_settings.get('use_kg', True)
     use_relationships = context_settings.get('use_relationships', True)
     use_rca = context_settings.get('use_rca', True)
-    use_pos = context_settings.get('use_pos', True)
+    use_pos = context_settings.get('use_pos', False)  # Default OFF
     use_metrics = context_settings.get('use_metrics', True)
     use_extra_suggestions = context_settings.get('use_extra_suggestions', True)
+    
+    # Log what's being used
+    print(f"📊 Context: KG={'✅' if use_kg else '❌'} | Rel={'✅' if use_relationships else '❌'} | RCA={'✅' if use_rca else '❌'} | POS={'✅' if use_pos else '❌'} | Extra={'✅' if use_extra_suggestions else '❌'}")
     
     table_columns = config.get('table_columns', {})
     kg_data = config.get('knowledge_graph_data', {}) if use_kg else {}
     relationships = config.get('relationships', []) if use_relationships else []
     
-    # Load RCA context
+    # Load RCA context (only if enabled)
     rca_list = config.get('rca_list', []) if use_rca else []
     rca_context = ""
-    if rca_list:
+    if rca_list and use_rca:
         rca_context = "\n\nBUSINESS RULES (RCA):\n"
         for rca in rca_list:
             title = rca.get('title', '')
@@ -745,11 +751,13 @@ def generate_sql_with_llm(user_query, entities, config, intent="total", temporal
                 rca_context += f"• {title}: {content}\n"
         rca_context += "(Use these rules to guide calculations, but keep the query simple and executable)\n"
         print(f"📋 RCA Rules loaded: {len(rca_list)} rules")
+    else:
+        print(f"📋 RCA: Disabled")
     
-    # Load POS tagging context
+    # Load POS tagging context (only if enabled)
     pos_tagging = config.get('pos_tagging', []) if use_pos else []
     pos_context = ""
-    if pos_tagging:
+    if pos_tagging and use_pos:
         pos_context = "\n\nPOS TAGGING (Entity Aliases):\n"
         for pos in pos_tagging:
             name = pos.get('name', '')
@@ -757,6 +765,8 @@ def generate_sql_with_llm(user_query, entities, config, intent="total", temporal
             if name and reference:
                 pos_context += f"• '{name}' refers to '{reference}'\n"
         print(f"🏷️ POS Tags loaded: {len(pos_tagging)} tags")
+    else:
+        print(f"🏷️ POS: Disabled")
     
     # Load Metrics context
     metrics_data = config.get('metrics_data', {}) if use_metrics else {}
@@ -768,12 +778,14 @@ def generate_sql_with_llm(user_query, entities, config, intent="total", temporal
                 metrics_context += f"• {metric_name}: {metric_desc}\n"
         print(f"📊 Metrics loaded: {len(metrics_data)} metrics")
     
-    # Load Extra Suggestions
+    # Load Extra Suggestions (only if enabled)
     extra_suggestions = config.get('extra_suggestions', '') if use_extra_suggestions else ''
     extra_context = ""
-    if extra_suggestions:
+    if extra_suggestions and use_extra_suggestions:
         extra_context = f"\n\nADDITIONAL INSTRUCTIONS:\n{extra_suggestions}\n"
         print(f"💡 Extra suggestions loaded")
+    else:
+        print(f"💡 Extra Suggestions: Disabled")
     
     # Build schema
     schema_info = []
@@ -1085,11 +1097,25 @@ def invoke_graph(user_query, module_id, session_data=None, feedback=None, stream
     print("🚀 INVOKE_GRAPH")
     print(f"   Query: {user_query}")
     print(f"   Feedback: {feedback.get('type') if feedback else 'None'}")
+    
+    # Log context settings
+    if context_settings:
+        print(f"   Context Settings:")
+        print(f"      KG: {'✅' if context_settings.get('use_kg', True) else '❌'}")
+        print(f"      Relationships: {'✅' if context_settings.get('use_relationships', True) else '❌'}")
+        print(f"      RCA: {'✅' if context_settings.get('use_rca', True) else '❌'}")
+        print(f"      Extra Suggestions: {'✅' if context_settings.get('use_extra_suggestions', True) else '❌'}")
+        print(f"      POS: {'✅' if context_settings.get('use_pos', False) else '❌'}")
+    
     print("🔵"*40 + "\n")
     
     # Initialize session
     if session_data is None:
         session_data = {}
+    
+    # Store context settings in session for use in SQL generation
+    if context_settings:
+        session_data['context_settings'] = context_settings
     
     # === RESET SESSION FOR NEW QUERIES ===
     # If this is a new query (not feedback), reset the session state
@@ -1173,6 +1199,9 @@ def invoke_graph(user_query, module_id, session_data=None, feedback=None, stream
         
         query_for_sql = session_data.get('original_user_query', user_query) if not user_query else user_query
         
+        # Get context settings from session or parameter
+        effective_context_settings = context_settings or session_data.get('context_settings', {})
+        
         sql = generate_sql_with_llm(
             query_for_sql,
             entities, 
@@ -1181,7 +1210,7 @@ def invoke_graph(user_query, module_id, session_data=None, feedback=None, stream
             temporal_info, 
             agg_info,
             selected_date_column,
-            context_settings  # Pass context settings for RCA, POS, etc.
+            effective_context_settings  # Pass context settings for RCA, POS, etc.
         )
         
         result = execute_sql(sql)
