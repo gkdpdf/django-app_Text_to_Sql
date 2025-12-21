@@ -86,6 +86,7 @@
         .input-wrapper{max-width:900px;margin:0 auto;position:relative}
         .input-box{width:100%;padding:10px 44px 10px 12px;background:#40414f;border:1px solid #565869;border-radius:10px;color:#ececf1;font-size:14px;resize:none}
         .send-btn{position:absolute;right:10px;bottom:8px;width:36px;height:36px;background:#19c37d;border:none;border-radius:8px;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+        .send-btn:disabled{background:#565869;cursor:not-allowed}
 
         ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:#202123}::-webkit-scrollbar-thumb{background:#565869;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#686b79}
         @media(max-width:768px){.sidebar{display:none}.message{max-width:100%;padding:0 8px}}
@@ -103,10 +104,7 @@
         <div class="main-chat">
             <div class="chat-header">
                 <h2 id="chatTitle">New Chat</h2>
-                <!-- Header status (shows active toggles) -->
-                <div class="header-status" id="headerContextStatus" aria-live="polite">
-                    <!-- badges updated by JS -->
-                </div>
+                <div class="header-status" id="headerContextStatus" aria-live="polite"></div>
             </div>
 
             <!-- Context Settings Panel -->
@@ -200,6 +198,10 @@
     let sessionData = null;
     let selectedItems = new Set();
     let currentClarificationContainer = null;
+    
+    // === REQUEST LOCKING ===
+    let isRequestInProgress = false;
+    let enterKeyHandler = null;
 
     function toggleContextPanel(){
         const content = document.getElementById('contextContent');
@@ -209,7 +211,6 @@
         icon.textContent = content.classList.contains('collapsed') ? '▶' : '▼';
     }
 
-    // Update both summary inside panel and the compact header status badges
     function updateContextSettings(){
         const useRCA = document.getElementById('useRCA') ? document.getElementById('useRCA').checked : true;
         const useExtraSuggestions = document.getElementById('useExtraSuggestions') ? document.getElementById('useExtraSuggestions').checked : true;
@@ -224,7 +225,6 @@
         const el = document.getElementById('contextSummary');
         if (el) el.textContent = summary;
 
-        // Update the header status badges
         renderHeaderStatus({ useRCA, useExtraSuggestions, usePOS });
     }
 
@@ -238,64 +238,158 @@
         };
     }
 
-    // Renders the compact header badges reflecting current toggles
     function renderHeaderStatus(flags){
         const container = document.getElementById('headerContextStatus');
         if(!container) return;
-        // Always show KG and Relationships as on
         const kgBadge = `<span class="status-badge status-on" title="Knowledge Graph">KG: On</span>`;
         const relBadge = `<span class="status-badge status-on" title="Relationships">Rel: On</span>`;
-
         const rca = flags.useRCA ? `<span class="status-badge status-on" title="RCA enabled">RCA: On</span>` : `<span class="status-badge status-off" title="RCA disabled">RCA: Off</span>`;
         const extra = flags.useExtraSuggestions ? `<span class="status-badge status-on" title="Extra Suggestions enabled">Extra: On</span>` : `<span class="status-badge status-off" title="Extra: Off">Extra: Off</span>`;
         const pos = flags.usePOS ? `<span class="status-badge status-on" title="POS enabled">POS: On</span>` : `<span class="status-badge status-off" title="POS disabled">POS: Off</span>`;
-
         container.innerHTML = `${kgBadge}${relBadge}${rca}${extra}${pos}`;
     }
 
-    // initialize header badges on load
     document.addEventListener('DOMContentLoaded', () => {
         updateContextSettings();
     });
 
-    // Input autosize + send
-    document.getElementById('messageInput').addEventListener('input', function(){ this.style.height='auto'; this.style.height = (this.scrollHeight) + 'px'; });
-    function handleKeyPress(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } }
+    // Input autosize
+    document.getElementById('messageInput').addEventListener('input', function(){ 
+        this.style.height='auto'; 
+        this.style.height = (this.scrollHeight) + 'px'; 
+    });
+    
+    function handleKeyPress(e){ 
+        if(e.key==='Enter' && !e.shiftKey){ 
+            e.preventDefault(); 
+            sendMessage(); 
+        } 
+    }
 
     function startNewChat(){
-        currentConversationId = null; pendingClarification = null; sessionData = null; selectedItems.clear();
+        currentConversationId = null; 
+        pendingClarification = null; 
+        sessionData = null; 
+        selectedItems.clear();
+        currentClarificationContainer = null;
+        isRequestInProgress = false;
+        
+        // Remove any existing Enter key handlers
+        if(enterKeyHandler) {
+            document.removeEventListener('keydown', enterKeyHandler);
+            enterKeyHandler = null;
+        }
+        
         document.getElementById('messagesContainer').innerHTML = `<div class="message-wrapper"><div class="message assistant-message"><div class="message-header"><div class="avatar assistant-avatar">🤖</div><strong>Assistant</strong></div><div class="message-content">Hi! I'm your assistant for <strong>{{ module.name }}</strong>. What would you like to know?</div></div></div>`;
         document.getElementById('chatTitle').textContent = 'New Chat';
         document.getElementById('messageInput').value = '';
+        document.getElementById('messageInput').disabled = false;
+        document.getElementById('sendBtn').disabled = false;
         document.getElementById('messageInput').focus();
     }
 
+    // === CLEAR PENDING STATE ===
+    function clearPendingState(){
+        pendingClarification = null;
+        selectedItems.clear();
+        currentClarificationContainer = null;
+        window.currentOptions = null;
+        window.isMultiSelect = false;
+        
+        // Remove Enter key handler for clarification
+        if(enterKeyHandler) {
+            document.removeEventListener('keydown', enterKeyHandler);
+            enterKeyHandler = null;
+        }
+    }
+
     async function sendMessage(){
-        const input = document.getElementById('messageInput'); const message = input.value.trim();
+        // === PREVENT DUPLICATE REQUESTS ===
+        if(isRequestInProgress) {
+            console.log('Request already in progress, ignoring...');
+            return;
+        }
+        
+        const input = document.getElementById('messageInput'); 
+        const message = input.value.trim();
         if(!message) return;
-        input.disabled = true; document.getElementById('sendBtn').disabled = true;
-        appendMessage('user', message); input.value=''; input.style.height='auto';
+        
+        // Lock requests
+        isRequestInProgress = true;
+        input.disabled = true; 
+        document.getElementById('sendBtn').disabled = true;
+        
+        // === CLEAR PENDING CLARIFICATION STATE FOR NEW MESSAGE ===
+        clearPendingState();
+        
+        appendMessage('user', message); 
+        input.value=''; 
+        input.style.height='auto';
+        
         try{
             const ctx = getContextSettings();
-            const resp = await fetch('/chat/api/', { method:'POST', headers:{ 'Content-Type':'application/json','X-CSRFToken': getCookie('csrftoken') }, body: JSON.stringify({ message, conversation_id: currentConversationId, module_id: MODULE_ID, session_data: sessionData, feedback: null, context_settings: ctx })});
+            const resp = await fetch('/chat/api/', { 
+                method:'POST', 
+                headers:{ 
+                    'Content-Type':'application/json',
+                    'X-CSRFToken': getCookie('csrftoken') 
+                }, 
+                body: JSON.stringify({ 
+                    message, 
+                    conversation_id: currentConversationId, 
+                    module_id: MODULE_ID, 
+                    session_data: sessionData, 
+                    feedback: null,  // Always null for new messages
+                    context_settings: ctx 
+                })
+            });
             if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const data = await resp.json(); handleResponse(data);
-        }catch(err){ console.error(err); appendMessage('assistant','❌ Sorry, something went wrong.'); }
-        finally{ input.disabled=false; document.getElementById('sendBtn').disabled=false; input.focus(); }
+            const data = await resp.json(); 
+            handleResponse(data);
+        }catch(err){ 
+            console.error(err); 
+            appendMessage('assistant','❌ Sorry, something went wrong.'); 
+        }
+        finally{ 
+            // Unlock requests
+            isRequestInProgress = false;
+            input.disabled=false; 
+            document.getElementById('sendBtn').disabled=false; 
+            input.focus(); 
+        }
     }
 
     function handleResponse(data){
         if(data.conversation_id) currentConversationId = data.conversation_id;
         if(data.session_data) sessionData = data.session_data;
-        if(data.type === 'clarification') handleClarification(data);
-        else if(data.type === 'response'){ appendMessage('assistant', data.message); if(data.sql) appendSQL(data.sql); if(data.data && data.data.length) renderTable(data.data); }
-        else if(data.type === 'error') appendMessage('assistant','❌ ' + data.message);
+        
+        if(data.type === 'clarification') {
+            handleClarification(data);
+        } else if(data.type === 'response'){ 
+            // Clear any pending state on successful response
+            clearPendingState();
+            appendMessage('assistant', data.message); 
+            if(data.sql) appendSQL(data.sql); 
+            if(data.data && data.data.length) renderTable(data.data); 
+        } else if(data.type === 'error') {
+            clearPendingState();
+            appendMessage('assistant','❌ ' + data.message);
+        }
+        
         loadConversations();
     }
 
-    // Clarification (scoped)
+    // Clarification handler
     function handleClarification(data){
+        // Clear previous state
         selectedItems = new Set();
+        
+        // Remove old Enter key handler
+        if(enterKeyHandler) {
+            document.removeEventListener('keydown', enterKeyHandler);
+            enterKeyHandler = null;
+        }
+        
         pendingClarification = {
             subtype: data.subtype,
             entity: data.entity,
@@ -303,6 +397,7 @@
             clarification_context: data.clarification_context,
             allow_custom: data.allow_custom || false
         };
+        
         window.currentOptions = Array.isArray(data.options) ? data.options : [];
         window.isMultiSelect = true;
         const isValueSelection = data.subtype === 'value_selection';
@@ -311,6 +406,7 @@
         html += `<div class="clarification-title">${escapeHtml(data.message)}</div>`;
         html += `<div class="multi-select-info" style="display:none;"><div class="selected-items"></div></div>`;
         html += `<div class="options-list">`;
+        
         if(!Array.isArray(data.options) || data.options.length === 0){
             html += `<div style="padding:12px;color:#ff6b6b">No options available</div>`;
         } else {
@@ -328,17 +424,16 @@
         html += `</div>`;
 
         appendRawHTML(html);
+        
         const container = document.querySelector('#messagesContainer .message-wrapper:last-child .message .message-content .clarification');
         if(container){
             currentClarificationContainer = container;
             attachScopedHandlers(container);
-        } else {
-            attachScopedHandlers();
         }
     }
 
     function attachScopedHandlers(container){
-        const root = container || currentClarificationContainer || document.querySelector('#messagesContainer .message-wrapper:last-child .message .message-content');
+        const root = container || currentClarificationContainer;
         if(!root) return;
         selectedItems = new Set();
 
@@ -348,8 +443,13 @@
             box.addEventListener('click', function(){
                 const idx = Number(this.dataset.index);
                 if(Number.isNaN(idx)) return;
-                if(selectedItems.has(idx)){ selectedItems.delete(idx); this.classList.remove('selected'); }
-                else { selectedItems.add(idx); this.classList.add('selected'); }
+                if(selectedItems.has(idx)){ 
+                    selectedItems.delete(idx); 
+                    this.classList.remove('selected'); 
+                } else { 
+                    selectedItems.add(idx); 
+                    this.classList.add('selected'); 
+                }
                 updateScopedSelectionDisplay(root);
             });
         });
@@ -358,14 +458,52 @@
         if(searchBtn){
             const input = root.querySelector('.search-input');
             searchBtn.onclick = function(){
+                if(isRequestInProgress) return;
                 if(!input) return;
                 const val = input.value.trim();
                 if(!val){ alert('Please enter a search term'); return; }
-                input.disabled = true; searchBtn.disabled = true;
+                
+                isRequestInProgress = true;
+                input.disabled = true; 
+                searchBtn.disabled = true;
+                
                 appendMessage('user', `Searching for: ${val}`);
-                const feedback = { type:'custom_value', custom_value: val, entity: pendingClarification?.entity, entity_type: pendingClarification?.entity_type, clarification_context: pendingClarification?.clarification_context };
-                fetch('/chat/api/', { method:'POST', headers:{ 'Content-Type':'application/json','X-CSRFToken': getCookie('csrftoken') }, body: JSON.stringify({ message:'', conversation_id: currentConversationId, module_id: MODULE_ID, session_data: sessionData, feedback }) })
-                    .then(resp=>resp.json()).then(data=>handleResponse(data)).catch(err=>{ console.error(err); appendMessage('assistant','❌ Search failed.'); input.disabled=false; searchBtn.disabled=false; });
+                
+                const feedback = { 
+                    type:'custom_value', 
+                    custom_value: val, 
+                    entity: pendingClarification?.entity, 
+                    entity_type: pendingClarification?.entity_type, 
+                    clarification_context: pendingClarification?.clarification_context 
+                };
+                
+                fetch('/chat/api/', { 
+                    method:'POST', 
+                    headers:{ 
+                        'Content-Type':'application/json',
+                        'X-CSRFToken': getCookie('csrftoken') 
+                    }, 
+                    body: JSON.stringify({ 
+                        message:'', 
+                        conversation_id: currentConversationId, 
+                        module_id: MODULE_ID, 
+                        session_data: sessionData, 
+                        feedback,
+                        context_settings: getContextSettings()
+                    }) 
+                })
+                .then(resp=>resp.json())
+                .then(data=>{
+                    isRequestInProgress = false;
+                    handleResponse(data);
+                })
+                .catch(err=>{ 
+                    console.error(err); 
+                    isRequestInProgress = false;
+                    appendMessage('assistant','❌ Search failed.'); 
+                    input.disabled=false; 
+                    searchBtn.disabled=false; 
+                });
             };
         }
 
@@ -384,17 +522,21 @@
         }
 
         if(confirmBtn){
-            confirmBtn.onclick = function(){ confirmScopedSelection(root); };
+            confirmBtn.onclick = function(){ 
+                confirmScopedSelection(root); 
+            };
         }
 
-        function handleEnterScoped(e){
-            if(e.key === 'Enter' && selectedItems.size > 0){
+        // Create new Enter key handler
+        enterKeyHandler = function(e){
+            if(e.key === 'Enter' && !e.shiftKey && selectedItems.size > 0 && !isRequestInProgress){
+                // Don't trigger if typing in the main input
+                if(document.activeElement === document.getElementById('messageInput')) return;
                 e.preventDefault();
                 confirmScopedSelection(root);
             }
-        }
-        document.removeEventListener('keydown', handleEnterScoped);
-        document.addEventListener('keydown', handleEnterScoped);
+        };
+        document.addEventListener('keydown', enterKeyHandler);
 
         updateScopedSelectionDisplay(root);
     }
@@ -402,11 +544,13 @@
     function updateScopedSelectionDisplay(root){
         if(!root) root = currentClarificationContainer;
         if(!root) return;
+        
         const display = root.querySelector('.selected-items');
         const multiInfo = root.querySelector('.multi-select-info');
         const confirmBtn = root.querySelector('.confirm-btn');
 
         if(display) display.innerHTML = '';
+        
         selectedItems.forEach(index => {
             const option = window.currentOptions?.[index];
             const tag = document.createElement('div');
@@ -439,24 +583,39 @@
             const box = currentClarificationContainer.querySelector(`.option-box[data-index="${index}"]`);
             if(box) box.classList.remove('selected');
             updateScopedSelectionDisplay(currentClarificationContainer);
-        } else {
-            updateScopedSelectionDisplay();
         }
     }
 
     async function confirmScopedSelection(root){
+        // === PREVENT DUPLICATE REQUESTS ===
+        if(isRequestInProgress) {
+            console.log('Request already in progress, ignoring...');
+            return;
+        }
+        
         if(!root) root = currentClarificationContainer;
         if(!root) return;
         if(selectedItems.size === 0) return;
-        root.querySelectorAll('.option-box').forEach(b => { b.style.pointerEvents='none'; b.style.opacity='0.6'; });
+        
+        // Lock requests
+        isRequestInProgress = true;
+        
+        // Disable UI
+        root.querySelectorAll('.option-box').forEach(b => { 
+            b.style.pointerEvents='none'; 
+            b.style.opacity='0.6'; 
+        });
         const confirmBtn = root.querySelector('.confirm-btn');
         const clearBtn = root.querySelector('.clear-btn');
         if(confirmBtn) confirmBtn.disabled = true;
         if(clearBtn) clearBtn.disabled = true;
 
         const selectedValues = Array.from(selectedItems).map(i => window.currentOptions[i]);
-        const selectionText = selectedValues.length > 3 ? `${selectedValues.slice(0,3).join(', ')}... (${selectedValues.length} items total)` : selectedValues.join(', ');
-        appendMessage('user', `Selected ${selectedValues.length} items: ${selectionText}`);
+        const selectionText = selectedValues.length > 3 
+            ? `${selectedValues.slice(0,3).join(', ')}... (${selectedValues.length} items total)` 
+            : selectedValues.join(', ');
+        
+        appendMessage('user', `Selected: ${selectionText}`);
 
         const feedback = {
             type: pendingClarification?.subtype,
@@ -468,86 +627,212 @@
         };
 
         try {
-            const resp = await fetch('/chat/api/', { method:'POST', headers:{ 'Content-Type':'application/json','X-CSRFToken': getCookie('csrftoken') }, body: JSON.stringify({ message:'', conversation_id: currentConversationId, module_id: MODULE_ID, session_data: sessionData, feedback, context_settings: getContextSettings() })});
-            if(!resp.ok) throw new Error(`HTTP ${resp.status}`); const data = await resp.json(); handleResponse(data);
-        } catch(err){ console.error(err); appendMessage('assistant','❌ Error processing selection.'); }
+            const resp = await fetch('/chat/api/', { 
+                method:'POST', 
+                headers:{ 
+                    'Content-Type':'application/json',
+                    'X-CSRFToken': getCookie('csrftoken') 
+                }, 
+                body: JSON.stringify({ 
+                    message:'', 
+                    conversation_id: currentConversationId, 
+                    module_id: MODULE_ID, 
+                    session_data: sessionData, 
+                    feedback, 
+                    context_settings: getContextSettings() 
+                })
+            });
+            
+            if(!resp.ok) throw new Error(`HTTP ${resp.status}`); 
+            const data = await resp.json(); 
+            
+            // Unlock before handling response
+            isRequestInProgress = false;
+            handleResponse(data);
+        } catch(err){ 
+            console.error(err); 
+            isRequestInProgress = false;
+            appendMessage('assistant','❌ Error processing selection.'); 
+        }
     }
 
-    // fallback single-select (unchanged)
-    async function selectSingleOption(optionIndex){
-        const selectedOption = window.currentOptions[optionIndex];
-        document.querySelectorAll('.option-box').forEach(b => { b.style.pointerEvents='none'; b.style.opacity='0.6'; });
-        if(document.querySelector('.search-input')) { document.querySelector('.search-input').disabled = true; document.querySelector('.search-btn').disabled = true; }
-        appendMessage('user', selectedOption);
-        const feedback = { type: pendingClarification?.subtype, selected_option: selectedOption, entity: pendingClarification?.entity, entity_type: pendingClarification?.entity_type, clarification_context: pendingClarification?.clarification_context };
-        try {
-            const resp = await fetch('/chat/api/', { method:'POST', headers:{ 'Content-Type':'application/json','X-CSRFToken': getCookie('csrftoken') }, body: JSON.stringify({ message:'', conversation_id: currentConversationId, module_id: MODULE_ID, session_data: sessionData, feedback, context_settings: getContextSettings() })});
-            if(!resp.ok) throw new Error(`HTTP ${resp.status}`); const data = await resp.json(); handleResponse(data);
-        } catch(err){ console.error(err); appendMessage('assistant','❌ Error processing selection.'); }
-    }
-
-    // fallback search (unchanged)
-    async function searchCustomValue(){
-        const input = document.querySelector('.search-input');
-        const val = input ? input.value.trim() : '';
-        if(!val){ alert('Please enter a search term'); return; }
-        input.disabled = true; const sb = document.querySelector('.search-btn'); if(sb) sb.disabled = true;
-        document.querySelectorAll('.option-box').forEach(b => b.style.pointerEvents='none');
-        appendMessage('user', `Searching for: ${val}`);
-        const feedback = { type:'custom_value', custom_value: val, entity: pendingClarification?.entity, entity_type: pendingClarification?.entity_type, clarification_context: pendingClarification?.clarification_context };
-        try {
-            const resp = await fetch('/chat/api/', { method:'POST', headers:{ 'Content-Type':'application/json','X-CSRFToken': getCookie('csrftoken') }, body: JSON.stringify({ message:'', conversation_id: currentConversationId, module_id: MODULE_ID, session_data: sessionData, feedback })});
-            if(!resp.ok) throw new Error(`HTTP ${resp.status}`); const data = await resp.json(); handleResponse(data);
-        } catch(err){ console.error(err); appendMessage('assistant','❌ Search failed.'); if(input) input.disabled=false; if(sb) sb.disabled=false; }
-    }
-
-    // helpers
+    // Helper functions
     function appendMessage(role, content){
-        const container = document.getElementById('messagesContainer'); const isUser = role === 'user';
-        const wrapper = document.createElement('div'); wrapper.className = 'message-wrapper';
-        const msg = document.createElement('div'); msg.className = 'message ' + (isUser ? 'user-message' : 'assistant-message');
+        const container = document.getElementById('messagesContainer'); 
+        const isUser = role === 'user';
+        const wrapper = document.createElement('div'); 
+        wrapper.className = 'message-wrapper';
+        const msg = document.createElement('div'); 
+        msg.className = 'message ' + (isUser ? 'user-message' : 'assistant-message');
         msg.innerHTML = `<div class="message-header"><div class="avatar ${isUser ? 'user-avatar' : 'assistant-avatar'}">${isUser ? '👤' : '🤖'}</div><strong>${isUser ? 'You' : 'Assistant'}</strong></div><div class="message-content">${escapeHtml(content)}</div>`;
-        wrapper.appendChild(msg); container.appendChild(wrapper); container.scrollTop = container.scrollHeight;
+        wrapper.appendChild(msg); 
+        container.appendChild(wrapper); 
+        container.scrollTop = container.scrollHeight;
     }
 
     function appendSQL(sql){
-        const container = document.getElementById('messagesContainer'); const last = container.querySelector('.message-wrapper:last-child .message');
-        if(!last) return; const div = document.createElement('div'); div.className = 'sql-code'; div.innerHTML = `<div class="sql-header"><div class="sql-title">SQL Query</div><button class="copy-sql-btn" onclick="copySQL(this)">Copy</button></div><pre>${escapeHtml(sql)}</pre>`; last.appendChild(div); container.scrollTop = container.scrollHeight;
+        const container = document.getElementById('messagesContainer'); 
+        const last = container.querySelector('.message-wrapper:last-child .message');
+        if(!last) return; 
+        const div = document.createElement('div'); 
+        div.className = 'sql-code'; 
+        div.innerHTML = `<div class="sql-header"><div class="sql-title">SQL Query</div><button class="copy-sql-btn" onclick="copySQL(this)">Copy</button></div><pre>${escapeHtml(sql)}</pre>`; 
+        last.appendChild(div); 
+        container.scrollTop = container.scrollHeight;
     }
-    function copySQL(btn){ const t = btn.closest('.sql-code').querySelector('pre').textContent; navigator.clipboard.writeText(t).then(()=>{ const o=btn.textContent; btn.textContent='Copied!'; setTimeout(()=>btn.textContent=o,1500); }); }
+    
+    function copySQL(btn){ 
+        const t = btn.closest('.sql-code').querySelector('pre').textContent; 
+        navigator.clipboard.writeText(t).then(()=>{ 
+            const o=btn.textContent; 
+            btn.textContent='Copied!'; 
+            setTimeout(()=>btn.textContent=o,1500); 
+        }); 
+    }
 
     function renderTable(data){
-        if(!data||!data.length) return; const container = document.getElementById('messagesContainer'); const last = container.querySelector('.message-wrapper:last-child .message'); if(!last) return;
-        const cols = Object.keys(data[0]); let html = `<div class="data-table-wrapper"><div class="table-header"><div class="table-title">Results (${data.length} rows)</div><button class="clear-btn" onclick="exportToCSV(this)">Export CSV</button></div><div class="table-scroll"><table class="data-table"><thead><tr>`;
-        cols.forEach(c=> html += `<th>${escapeHtml(c)}</th>`); html += `</tr></thead><tbody>`;
-        data.forEach(r=>{ html += '<tr>'; cols.forEach(c=>{ let v=r[c]; let d=v; if(v===null||v===undefined) d='-'; else if(typeof v==='number') d=v.toLocaleString(); html += `<td>${escapeHtml(String(d))}</td>`; }); html += '</tr>'; });
-        html += `</tbody></table></div></div>`; const div=document.createElement('div'); div.innerHTML=html; last.appendChild(div); container.scrollTop = container.scrollHeight;
+        if(!data||!data.length) return; 
+        const container = document.getElementById('messagesContainer'); 
+        const last = container.querySelector('.message-wrapper:last-child .message'); 
+        if(!last) return;
+        
+        const cols = Object.keys(data[0]); 
+        let html = `<div class="data-table-wrapper"><div class="table-header"><div class="table-title">Results (${data.length} rows)</div><button class="clear-btn" onclick="exportToCSV(this)">Export CSV</button></div><div class="table-scroll"><table class="data-table"><thead><tr>`;
+        cols.forEach(c=> html += `<th>${escapeHtml(c)}</th>`); 
+        html += `</tr></thead><tbody>`;
+        data.forEach(r=>{ 
+            html += '<tr>'; 
+            cols.forEach(c=>{ 
+                let v=r[c]; 
+                let d=v; 
+                if(v===null||v===undefined) d='-'; 
+                else if(typeof v==='number') d=v.toLocaleString(); 
+                html += `<td>${escapeHtml(String(d))}</td>`; 
+            }); 
+            html += '</tr>'; 
+        });
+        html += `</tbody></table></div></div>`; 
+        const div=document.createElement('div'); 
+        div.innerHTML=html; 
+        last.appendChild(div); 
+        container.scrollTop = container.scrollHeight;
     }
 
     function exportToCSV(btn){
-        const table = btn.closest('.data-table-wrapper').querySelector('table'); const headers = Array.from(table.querySelectorAll('thead th')).map(th=>th.textContent);
-        const rows = Array.from(table.querySelectorAll('tbody tr')).map(tr=>Array.from(tr.querySelectorAll('td')).map(td=>{ let v=td.textContent; if(v.includes(',')) v=`"${v}"`; return v; }).join(','));
-        const csv = [headers.join(','), ...rows].join('\n'); const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='results.csv'; a.click(); URL.revokeObjectURL(url);
+        const table = btn.closest('.data-table-wrapper').querySelector('table'); 
+        const headers = Array.from(table.querySelectorAll('thead th')).map(th=>th.textContent);
+        const rows = Array.from(table.querySelectorAll('tbody tr')).map(tr=>
+            Array.from(tr.querySelectorAll('td')).map(td=>{ 
+                let v=td.textContent; 
+                if(v.includes(',')) v=`"${v}"`; 
+                return v; 
+            }).join(',')
+        );
+        const csv = [headers.join(','), ...rows].join('\n'); 
+        const blob=new Blob([csv],{type:'text/csv'}); 
+        const url=URL.createObjectURL(blob); 
+        const a=document.createElement('a'); 
+        a.href=url; 
+        a.download='results.csv'; 
+        a.click(); 
+        URL.revokeObjectURL(url);
     }
 
     function appendRawHTML(html){
-        const c = document.getElementById('messagesContainer'); const w=document.createElement('div'); w.className='message-wrapper'; const m=document.createElement('div'); m.className='message assistant-message'; m.innerHTML = `<div class="message-header"><div class="avatar assistant-avatar">🤖</div><strong>Assistant</strong></div><div class="message-content">${html}</div>`; w.appendChild(m); c.appendChild(w); c.scrollTop = c.scrollHeight;
+        const c = document.getElementById('messagesContainer'); 
+        const w=document.createElement('div'); 
+        w.className='message-wrapper'; 
+        const m=document.createElement('div'); 
+        m.className='message assistant-message'; 
+        m.innerHTML = `<div class="message-header"><div class="avatar assistant-avatar">🤖</div><strong>Assistant</strong></div><div class="message-content">${html}</div>`; 
+        w.appendChild(m); 
+        c.appendChild(w); 
+        c.scrollTop = c.scrollHeight;
     }
 
     async function loadConversations(){
-        try { const resp = await fetch(`/conversations/?module_id=${MODULE_ID}`); if(!resp.ok) return; const data = await resp.json(); const list = document.getElementById('conversationsList'); if(!data.conversations||data.conversations.length===0){ list.innerHTML='<div class="empty-state">No conversations yet</div>'; return; } list.innerHTML = data.conversations.map(conv => `<div class="conversation-item ${conv.id===currentConversationId?'active':''}" onclick="loadConversation(${conv.id})">${escapeHtml(conv.title)}<button class="delete-conv-btn" onclick="event.stopPropagation(); deleteConversation(${conv.id})" title="Delete">🗑️</button></div>`).join(''); } catch(err){ console.error('Error loading conversations',err); }
+        try { 
+            const resp = await fetch(`/conversations/?module_id=${MODULE_ID}`); 
+            if(!resp.ok) return; 
+            const data = await resp.json(); 
+            const list = document.getElementById('conversationsList'); 
+            if(!data.conversations||data.conversations.length===0){ 
+                list.innerHTML='<div class="empty-state">No conversations yet</div>'; 
+                return; 
+            } 
+            list.innerHTML = data.conversations.map(conv => 
+                `<div class="conversation-item ${conv.id===currentConversationId?'active':''}" onclick="loadConversation(${conv.id})">${escapeHtml(conv.title)}<button class="delete-conv-btn" onclick="event.stopPropagation(); deleteConversation(${conv.id})" title="Delete">🗑️</button></div>`
+            ).join(''); 
+        } catch(err){ 
+            console.error('Error loading conversations',err); 
+        }
     }
 
     async function loadConversation(id){
-        try { const resp = await fetch(`/conversation/${id}/`); if(!resp.ok) return; const data = await resp.json(); currentConversationId = id; document.getElementById('messagesContainer').innerHTML=''; document.getElementById('chatTitle').textContent = data.conversation.title; data.messages.forEach(msg => { appendMessage(msg.is_user ? 'user' : 'assistant', msg.content); if(!msg.is_user && msg.metadata){ if(msg.metadata.sql) appendSQL(msg.metadata.sql); if(msg.metadata.data) renderTable(msg.metadata.data); } }); loadConversations(); } catch(err){ console.error('Error loading convo',err); }
+        try { 
+            const resp = await fetch(`/conversation/${id}/`); 
+            if(!resp.ok) return; 
+            const data = await resp.json(); 
+            
+            // Clear state
+            clearPendingState();
+            isRequestInProgress = false;
+            
+            currentConversationId = id; 
+            sessionData = data.conversation.context;
+            
+            document.getElementById('messagesContainer').innerHTML=''; 
+            document.getElementById('chatTitle').textContent = data.conversation.title; 
+            
+            data.messages.forEach(msg => { 
+                appendMessage(msg.is_user ? 'user' : 'assistant', msg.content); 
+                if(!msg.is_user && msg.metadata){ 
+                    if(msg.metadata.sql) appendSQL(msg.metadata.sql); 
+                    if(msg.metadata.data) renderTable(msg.metadata.data); 
+                } 
+            }); 
+            
+            loadConversations(); 
+        } catch(err){ 
+            console.error('Error loading convo',err); 
+        }
     }
 
-    async function deleteConversation(id){ if(!confirm('Delete this conversation?')) return; try { const resp = await fetch(`/conversation/${id}/delete/`, { method:'DELETE', headers:{ 'X-CSRFToken': getCookie('csrftoken') } }); if(!resp.ok) return; if(id === currentConversationId) startNewChat(); loadConversations(); } catch(err){ console.error('Delete error',err); } }
+    async function deleteConversation(id){ 
+        if(!confirm('Delete this conversation?')) return; 
+        try { 
+            const resp = await fetch(`/conversation/${id}/delete/`, { 
+                method:'DELETE', 
+                headers:{ 'X-CSRFToken': getCookie('csrftoken') } 
+            }); 
+            if(!resp.ok) return; 
+            if(id === currentConversationId) startNewChat(); 
+            loadConversations(); 
+        } catch(err){ 
+            console.error('Delete error',err); 
+        } 
+    }
 
-    function escapeHtml(text){ const d=document.createElement('div'); d.textContent = text; return d.innerHTML; }
-    function getCookie(name){ let cookieValue=null; if(document.cookie){ document.cookie.split(';').forEach(c=>{ const t=c.trim(); if(t.startsWith(name+'=')) cookieValue=decodeURIComponent(t.substring(name.length+1)); }); } return cookieValue; }
+    function escapeHtml(text){ 
+        const d=document.createElement('div'); 
+        d.textContent = text; 
+        return d.innerHTML; 
+    }
+    
+    function getCookie(name){ 
+        let cookieValue=null; 
+        if(document.cookie){ 
+            document.cookie.split(';').forEach(c=>{ 
+                const t=c.trim(); 
+                if(t.startsWith(name+'=')) cookieValue=decodeURIComponent(t.substring(name.length+1)); 
+            }); 
+        } 
+        return cookieValue; 
+    }
 
-    window.addEventListener('DOMContentLoaded', () => { loadConversations(); });
+    window.addEventListener('DOMContentLoaded', () => { 
+        loadConversations(); 
+    });
 </script>
 </body>
 </html>
