@@ -1115,11 +1115,87 @@ def execute_sql(sql):
 
 
 # ============================================================
-# 📝 FORMAT RESULTS
+# 📝 FORMAT RESULTS - Descriptive Response Generation
 # ============================================================
 
-def format_results(data, intent, temporal_info=None):
-    """Format results for display"""
+def format_results(data, intent, temporal_info=None, user_query=None, selected_rca=None):
+    """Format results with descriptive response using LLM"""
+    if not data:
+        return "No results found for your query."
+    
+    # For simple single-value results, generate descriptive response
+    first_row = data[0]
+    
+    # Build a summary of the data for LLM
+    data_summary = ""
+    
+    # Single aggregation result
+    if len(data) == 1 and len(first_row) <= 3:
+        for key, value in first_row.items():
+            if value is not None:
+                if isinstance(value, (int, float)):
+                    data_summary += f"{key}: ₹{value:,.2f}\n"
+                else:
+                    data_summary += f"{key}: {value}\n"
+    
+    # Multiple rows - summarize
+    elif len(data) > 1:
+        data_summary = f"Found {len(data)} records:\n"
+        # Show first few rows
+        for i, row in enumerate(data[:5]):
+            row_text = ", ".join([f"{k}: {v}" for k, v in row.items() if v is not None])
+            data_summary += f"  {i+1}. {row_text}\n"
+        if len(data) > 5:
+            data_summary += f"  ... and {len(data) - 5} more records\n"
+    
+    # Generate descriptive response using LLM
+    try:
+        rca_context = ""
+        if selected_rca:
+            rca_context = f"\nApplied RCA Rule: {selected_rca.get('title', '')} - {selected_rca.get('content', '')}"
+        
+        prompt = f"""Generate a clear, descriptive response for this data query result.
+
+User Query: {user_query or 'Data query'}
+{rca_context}
+
+Data Results:
+{data_summary}
+
+Raw Data (first 5 rows): {json.dumps(data[:5], default=str)}
+
+Instructions:
+1. Provide a natural, conversational response
+2. Highlight key insights from the data
+3. If it's an RCA query, explain what the data reveals about the root cause
+4. Use bullet points for multiple insights
+5. Format numbers with ₹ symbol and commas for Indian currency
+6. Keep it concise but informative (2-4 sentences for simple queries, more for RCA)
+7. Don't just state the number - explain what it means
+
+Response:"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a helpful data analyst. Provide clear, insightful responses about business data. Be concise but descriptive."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=500
+        )
+        
+        descriptive_response = response.choices[0].message.content.strip()
+        return descriptive_response
+        
+    except Exception as e:
+        print(f"⚠️ LLM response generation failed: {e}")
+        # Fallback to basic formatting
+        return format_results_basic(data, intent, temporal_info)
+
+
+def format_results_basic(data, intent, temporal_info=None):
+    """Basic formatting fallback"""
     if not data:
         return "No results found."
     
@@ -1340,9 +1416,13 @@ def invoke_graph(user_query, module_id, session_data=None, feedback=None, stream
                 "data": data
             }
         
+        # Get the original query and selected RCA for descriptive response
+        original_query = session_data.get('original_user_query', user_query) or query_for_sql
+        selected_rca = session_data.get('selected_rca')
+        
         return {
             "type": "response",
-            "message": format_results(data, intent, temporal_info),
+            "message": format_results(data, intent, temporal_info, original_query, selected_rca),
             "sql": sql,
             "data": data,
             "chart": chart,
