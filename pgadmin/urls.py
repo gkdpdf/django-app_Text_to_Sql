@@ -44,4 +44,14 @@ urlpatterns = [
     path('knowledge-graph/', views.knowledge_graph_view, name='knowledge_graph'),
     path('knowledge-graph/download/', views.download_knowledge_graph_csv, name='download_knowledge_graph'),
     path('knowledge-graph/upload/', views.upload_knowledge_graph, name='upload_knowledge_graph'),
+
+
+# Dashboard Builder (NEW)
+    path('dashboard-builder/<int:module_id>/', views.dashboard_builder_view, name='dashboard_builder'),
+    path('dashboard/api/generate/', views.dashboard_generate_api, name='dashboard_generate'),
+    path('dashboard/api/save/', views.dashboard_save_api, name='dashboard_save'),
+    path('dashboard/api/list/', views.dashboard_list_api, name='dashboard_list'),
+    path('dashboard/api/get/<int:dashboard_id>/', views.dashboard_get_api, name='dashboard_get'),
+    path('dashboard/api/delete/<int:dashboard_id>/', views.dashboard_delete_api, name='dashboard_delete'),
+    path('dashboard/api/filter-values/', views.dashboard_filter_values_api, name='dashboard_filter_values'),
 ]

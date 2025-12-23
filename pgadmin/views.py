@@ -5,6 +5,7 @@ import json
 import logging
 import traceback
 from datetime import datetime
+from decimal import Decimal
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.db import connection as django_connection
@@ -17,6 +18,12 @@ from .models import (
     Module, KnowledgeGraph, Metrics, RCA,
     Extra_suggestion, Conversation, Message
 )
+
+# Try to import Dashboard model, create if not exists
+try:
+    from .models import Dashboard
+except ImportError:
+    Dashboard = None
 
 logger = logging.getLogger(__name__)
 SESSION_STORE = {}
@@ -57,6 +64,21 @@ def _get_table_columns(table_name):
             ORDER BY ordinal_position
         """, [table_name])
         return [{"name": r[0], "type": r[1]} for r in cursor.fetchall()]
+
+
+def api_table_columns(request):
+    """API endpoint to get columns for a table"""
+    table_name = request.GET.get("table", "")
+    
+    if not table_name:
+        return JsonResponse({"error": "table parameter required", "columns": []}, status=400)
+    
+    try:
+        columns = _get_table_columns(table_name)
+        return JsonResponse({"columns": columns})
+    except Exception as e:
+        logger.exception(f"Error getting columns for table {table_name}")
+        return JsonResponse({"error": str(e), "columns": []}, status=500)
 
 
 def _get_sample_data(table_name, limit=3):
@@ -1068,3 +1090,457 @@ def delete_conversation(request, conversation_id):
     except Exception as e:
         logger.exception("delete_conversation error")
         return JsonResponse({"error": str(e)}, status=500)
+
+
+# ==================================================
+# 📊 DASHBOARD BUILDER
+# ==================================================
+
+def dashboard_builder_view(request, module_id):
+    """Dashboard Builder page"""
+    user_name = request.session.get("user_name")
+    if not user_name:
+        return redirect("login")
+    
+    module = get_object_or_404(Module, id=module_id, user_name=user_name)
+    return render(request, "dashboard_builder.html", {"module": module})
+
+
+@csrf_exempt
+def dashboard_generate_api(request):
+    """Generate dashboard widgets based on prompt"""
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+    
+    try:
+        from openai import OpenAI
+        import os
+        
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        
+        payload = json.loads(request.body or "{}")
+        prompt = payload.get("prompt", "").strip()
+        module_id = payload.get("module_id")
+        
+        if not prompt or not module_id:
+            return JsonResponse({"error": "prompt and module_id required"}, status=400)
+        
+        user_name = request.session.get("user_name")
+        if not user_name:
+            return JsonResponse({"error": "Not authenticated"}, status=401)
+        
+        module = get_object_or_404(Module, id=module_id, user_name=user_name)
+        
+        # Get module schema
+        tables_data = module.tables or []
+        schema_info = []
+        
+        for table in tables_data:
+            # Handle both string and dict formats
+            if isinstance(table, str):
+                table_name = table
+            elif isinstance(table, dict):
+                table_name = table.get('name', '')
+            else:
+                continue
+            
+            if not table_name:
+                continue
+                
+            columns = _get_table_columns(table_name)
+            col_names = [c['name'] if isinstance(c, dict) else str(c) for c in columns]
+            schema_info.append(f"Table: {table_name}\nColumns: {', '.join(col_names)}")
+        
+        schema_text = "\n\n".join(schema_info)
+        
+        if not schema_text:
+            return JsonResponse({"error": "No tables found in module"}, status=400)
+        
+        # Generate dashboard specification using LLM
+        system_prompt = """You are a dashboard designer. Based on the user's request and database schema, generate a dashboard specification.
+
+Return ONLY valid JSON with this structure:
+{
+    "title": "Dashboard Title",
+    "widgets": [
+        {
+            "type": "kpi",
+            "title": "Key Metrics",
+            "sql": "SELECT COUNT(*) as total_orders, SUM(amount) as total_sales FROM table",
+            "kpis": [
+                {"label": "Total Orders", "value_key": "total_orders", "format": "number"},
+                {"label": "Total Sales", "value_key": "total_sales", "format": "currency"}
+            ]
+        },
+        {
+            "type": "chart",
+            "title": "Monthly Trend",
+            "chartType": "line|bar|pie|doughnut",
+            "sql": "SELECT month, SUM(sales) as sales FROM table GROUP BY month",
+            "labelKey": "month",
+            "valueKey": "sales"
+        },
+        {
+            "type": "table",
+            "title": "Top Products",
+            "sql": "SELECT product_name, SUM(quantity) as qty FROM table GROUP BY product_name ORDER BY qty DESC LIMIT 10"
+        }
+    ]
+}
+
+Rules:
+1. Generate 3-5 relevant widgets based on the prompt
+2. Use valid SQL for PostgreSQL
+3. Include at least one KPI widget
+4. Include at least one chart
+5. Use appropriate chart types (line for trends, bar for comparisons, pie for distributions)
+6. All SQL should use table/column names from the schema"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Database Schema:\n{schema_text}\n\nUser Request: {prompt}"}
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"}
+        )
+        
+        dashboard_spec = json.loads(response.choices[0].message.content)
+        
+        # Execute SQL for each widget and populate data
+        widgets = []
+        for widget_spec in dashboard_spec.get("widgets", []):
+            widget = process_widget(widget_spec)
+            if widget:
+                widgets.append(widget)
+        
+        return JsonResponse({
+            "success": True,
+            "title": dashboard_spec.get("title", "Dashboard"),
+            "widgets": widgets
+        })
+        
+    except Exception as e:
+        logger.exception("Dashboard generate error")
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+def process_widget(widget_spec):
+    """Execute SQL and process widget data"""
+    try:
+        sql = widget_spec.get("sql", "")
+        if not sql:
+            return None
+        
+        # Execute SQL
+        with django_connection.cursor() as cursor:
+            cursor.execute(sql)
+            columns = [col[0] for col in cursor.description]
+            rows = cursor.fetchall()
+        
+        # Convert to list of dicts
+        data = []
+        for row in rows:
+            row_dict = {}
+            for i, col in enumerate(columns):
+                value = row[i]
+                if isinstance(value, Decimal):
+                    value = float(value)
+                elif hasattr(value, 'isoformat'):
+                    value = value.isoformat()
+                row_dict[col] = value
+            data.append(row_dict)
+        
+        widget_type = widget_spec.get("type", "table")
+        
+        if widget_type == "kpi":
+            # Process KPI widget
+            kpis = []
+            if data:
+                row = data[0]
+                for kpi_spec in widget_spec.get("kpis", []):
+                    value_key = kpi_spec.get("value_key", "")
+                    kpis.append({
+                        "label": kpi_spec.get("label", value_key),
+                        "value": row.get(value_key, 0),
+                        "format": kpi_spec.get("format", "number"),
+                        "change": kpi_spec.get("change")
+                    })
+            
+            return {
+                "type": "kpi",
+                "title": widget_spec.get("title", "KPIs"),
+                "kpis": kpis
+            }
+        
+        elif widget_type == "chart":
+            # Process chart widget
+            labels = []
+            values = []
+            label_key = widget_spec.get("labelKey", columns[0] if columns else "label")
+            value_key = widget_spec.get("valueKey", columns[1] if len(columns) > 1 else "value")
+            
+            for row in data[:20]:  # Limit to 20 data points
+                labels.append(str(row.get(label_key, "")))
+                values.append(row.get(value_key, 0))
+            
+            return {
+                "type": "chart",
+                "title": widget_spec.get("title", "Chart"),
+                "chartType": widget_spec.get("chartType", "bar"),
+                "labels": labels,
+                "values": values
+            }
+        
+        else:
+            # Table widget
+            return {
+                "type": "table",
+                "title": widget_spec.get("title", "Data"),
+                "columns": columns,
+                "data": data[:100]  # Limit to 100 rows
+            }
+    
+    except Exception as e:
+        logger.error(f"Widget processing error: {e}")
+        return {
+            "type": "table",
+            "title": widget_spec.get("title", "Error"),
+            "error": str(e),
+            "data": []
+        }
+
+
+@csrf_exempt
+def dashboard_save_api(request):
+    """Save dashboard"""
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+    
+    try:
+        payload = json.loads(request.body or "{}")
+        dashboard_id = payload.get("dashboard_id")
+        module_id = payload.get("module_id")
+        title = payload.get("title", "Untitled Dashboard")
+        widgets = payload.get("widgets", [])
+        filters = payload.get("filters", [])
+        prompt = payload.get("prompt", "")
+        
+        logger.info(f"Saving dashboard: module={module_id}, title={title}, widgets={len(widgets)}")
+        
+        user_name = request.session.get("user_name")
+        if not user_name:
+            return JsonResponse({"error": "Not authenticated"}, status=401)
+        
+        module = get_object_or_404(Module, id=module_id, user_name=user_name)
+        
+        # Context data to store
+        context_data = {
+            "type": "dashboard",
+            "widgets": widgets,
+            "filters": filters,
+            "prompt": prompt
+        }
+        
+        # Store in Conversation model with session_id starting with 'dashboard_'
+        dashboard = None
+        if dashboard_id:
+            dashboard = Conversation.objects.filter(
+                id=dashboard_id, 
+                module=module,
+                session_id__startswith='dashboard_'
+            ).first()
+        
+        if dashboard:
+            dashboard.title = title
+            dashboard.context = context_data
+            dashboard.updated_at = timezone.now()
+            dashboard.save()
+            logger.info(f"Dashboard updated: {dashboard.id} - {title}")
+        else:
+            dashboard = Conversation.objects.create(
+                module=module,
+                session_id=f"dashboard_{int(timezone.now().timestamp())}",
+                title=title,
+                context=context_data
+            )
+            logger.info(f"Dashboard created: {dashboard.id} - {title}")
+        
+        return JsonResponse({
+            "success": True,
+            "dashboard_id": dashboard.id,
+            "title": dashboard.title
+        })
+        
+    except Exception as e:
+        logger.exception("Dashboard save error")
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+def dashboard_list_api(request):
+    """List all dashboards for a module"""
+    try:
+        module_id = request.GET.get("module_id")
+        user_name = request.session.get("user_name")
+        
+        logger.info(f"Dashboard list request: module_id={module_id}, user={user_name}")
+        
+        if not user_name:
+            return JsonResponse({"error": "Not authenticated"}, status=401)
+        
+        if not module_id:
+            return JsonResponse({"error": "module_id required"}, status=400)
+        
+        module = get_object_or_404(Module, id=module_id, user_name=user_name)
+        
+        # Get dashboards - filter by session_id starting with 'dashboard_'
+        dashboards = Conversation.objects.filter(
+            module=module,
+            session_id__startswith='dashboard_'
+        ).order_by("-updated_at")
+        
+        logger.info(f"Found {dashboards.count()} dashboards for module {module_id}")
+        
+        dashboard_list = []
+        for dash in dashboards:
+            try:
+                context = dash.context or {}
+                # Handle if context is stored as string
+                if isinstance(context, str):
+                    try:
+                        context = json.loads(context)
+                    except:
+                        context = {}
+                
+                widget_count = len(context.get("widgets", [])) if isinstance(context, dict) else 0
+                dashboard_list.append({
+                    "id": dash.id,
+                    "title": dash.title or "Untitled",
+                    "widget_count": widget_count,
+                    "updated_at": dash.updated_at.isoformat() if dash.updated_at else None
+                })
+            except Exception as e:
+                logger.error(f"Error processing dashboard {dash.id}: {e}")
+                continue
+        
+        logger.info(f"Returning {len(dashboard_list)} dashboards")
+        return JsonResponse({"dashboards": dashboard_list})
+        
+    except Exception as e:
+        logger.exception("Dashboard list error")
+        return JsonResponse({"error": str(e), "dashboards": []}, status=500)
+
+
+def dashboard_get_api(request, dashboard_id):
+    """Get a specific dashboard"""
+    try:
+        user_name = request.session.get("user_name")
+        if not user_name:
+            return JsonResponse({"error": "Not authenticated"}, status=401)
+        
+        dashboard = get_object_or_404(Conversation, id=dashboard_id)
+        
+        # Verify ownership
+        if dashboard.module.user_name != user_name:
+            return JsonResponse({"error": "Access denied"}, status=403)
+        
+        context = dashboard.context or {}
+        
+        # Ensure context is a dict
+        if not isinstance(context, dict):
+            try:
+                context = json.loads(context) if isinstance(context, str) else {}
+            except:
+                context = {}
+        
+        return JsonResponse({
+            "success": True,
+            "id": dashboard.id,
+            "title": dashboard.title,
+            "widgets": context.get("widgets", []),
+            "filters": context.get("filters", []),
+            "prompt": context.get("prompt", "")
+        })
+        
+    except Conversation.DoesNotExist:
+        return JsonResponse({"error": "Dashboard not found"}, status=404)
+    except Exception as e:
+        logger.exception("Dashboard get error")
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+def dashboard_delete_api(request, dashboard_id):
+    """Delete a dashboard"""
+    if request.method != "DELETE":
+        return JsonResponse({"error": "DELETE required"}, status=405)
+    
+    try:
+        user_name = request.session.get("user_name")
+        if not user_name:
+            return JsonResponse({"error": "Not authenticated"}, status=401)
+        
+        dashboard = get_object_or_404(Conversation, id=dashboard_id)
+        
+        # Verify ownership
+        if dashboard.module.user_name != user_name:
+            return JsonResponse({"error": "Access denied"}, status=403)
+        
+        dashboard.delete()
+        
+        return JsonResponse({"success": True})
+        
+    except Exception as e:
+        logger.exception("Dashboard delete error")
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+def dashboard_filter_values_api(request):
+    """Get distinct values for a column to use as filter options"""
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+    
+    try:
+        payload = json.loads(request.body or "{}")
+        table = payload.get("table", "")
+        column = payload.get("column", "")
+        
+        if not table or not column:
+            return JsonResponse({"error": "table and column required"}, status=400)
+        
+        user_name = request.session.get("user_name")
+        if not user_name:
+            return JsonResponse({"error": "Not authenticated"}, status=401)
+        
+        # Get distinct values from the column
+        with django_connection.cursor() as cursor:
+            # Use parameterized query for table/column names
+            # Note: Can't use params for identifiers, so we validate
+            safe_table = table.replace('"', '').replace("'", "").replace(";", "")
+            safe_column = column.replace('"', '').replace("'", "").replace(";", "")
+            
+            cursor.execute(f'''
+                SELECT DISTINCT "{safe_column}" 
+                FROM "{safe_table}" 
+                WHERE "{safe_column}" IS NOT NULL 
+                ORDER BY "{safe_column}" 
+                LIMIT 100
+            ''')
+            
+            values = [row[0] for row in cursor.fetchall()]
+            
+            # Convert to string for JSON
+            values = [str(v) if v is not None else None for v in values]
+        
+        return JsonResponse({
+            "success": True,
+            "table": table,
+            "column": column,
+            "values": values
+        })
+        
+    except Exception as e:
+        logger.exception("Filter values error")
+        return JsonResponse({"error": str(e), "values": []}, status=500)

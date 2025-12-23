@@ -76,6 +76,28 @@
         .clear-btn{padding:8px 10px;border-radius:8px;background:#565869;border:none;color:#ececf1;cursor:pointer;font-weight:600;font-size:13px}
 
         .sql-code{background:#2d2d2d;color:#f8f8f2;padding:12px;border-radius:8px;margin-top:8px;overflow-x:auto;font-family:monospace;font-size:13px}
+        
+        /* Markdown Formatting Styles */
+        .message-content h1,.message-content h2,.message-content h3,.message-content h4{color:#fff;margin:16px 0 8px 0;font-weight:700}
+        .message-content h1{font-size:20px;border-bottom:1px solid #444654;padding-bottom:8px}
+        .message-content h2{font-size:18px;border-bottom:1px solid #444654;padding-bottom:6px}
+        .message-content h3{font-size:16px;color:#19c37d}
+        .message-content h4{font-size:14px;color:#667eea}
+        .message-content p{margin:8px 0;line-height:1.6}
+        .message-content ul,.message-content ol{margin:8px 0 8px 20px;padding-left:10px}
+        .message-content li{margin:6px 0;line-height:1.5}
+        .message-content li::marker{color:#19c37d}
+        .message-content strong,.message-content b{color:#fff;font-weight:700}
+        .message-content em,.message-content i{color:#b4b4c4;font-style:italic}
+        .message-content code{background:#2d2d2d;color:#f8f8f2;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:13px}
+        .message-content pre{background:#2d2d2d;color:#f8f8f2;padding:12px;border-radius:8px;overflow-x:auto;margin:10px 0}
+        .message-content blockquote{border-left:3px solid #667eea;padding-left:12px;margin:10px 0;color:#b4b4c4;font-style:italic}
+        .message-content hr{border:none;border-top:1px solid #444654;margin:16px 0}
+        .message-content a{color:#667eea;text-decoration:underline}
+        .message-content table{width:100%;border-collapse:collapse;margin:10px 0}
+        .message-content th,.message-content td{border:1px solid #444654;padding:8px;text-align:left}
+        .message-content th{background:#2d2d2d;color:#fff;font-weight:700}
+        
         .table-header{display:flex;justify-content:space-between;align-items:center;padding:8px;background:#f8f9fa;border-bottom:1px solid #dee2e6}
         .data-table-wrapper{margin-top:10px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)}
         .table-scroll{overflow:auto;max-height:340px}.data-table{width:100%;border-collapse:collapse;font-size:13px}
@@ -746,6 +768,87 @@
     }
 
     // Helper functions
+    // === MARKDOWN PARSER ===
+    function parseMarkdown(text) {
+        if (!text) return '';
+        
+        // Escape HTML first
+        let html = text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        
+        // Code blocks (```code```)
+        html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+        
+        // Inline code (`code`)
+        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+        
+        // Headers (### Header)
+        html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+        html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+        html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+        html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+        
+        // Bold (**text** or __text__)
+        html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+        
+        // Italic (*text* or _text_)
+        html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+        
+        // Horizontal rule (---)
+        html = html.replace(/^---$/gm, '<hr>');
+        
+        // Blockquote (> text)
+        html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+        
+        // Unordered lists (- item or * item)
+        html = html.replace(/^[\-\*] (.+)$/gm, '<li>$1</li>');
+        
+        // Wrap consecutive <li> in <ul>
+        html = html.replace(/(<li>.*<\/li>\n?)+/g, function(match) {
+            return '<ul>' + match + '</ul>';
+        });
+        
+        // Numbered lists (1. item)
+        html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+        
+        // Links [text](url)
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+        
+        // Paragraphs - wrap lines that aren't already wrapped
+        const lines = html.split('\n');
+        const result = [];
+        let inList = false;
+        let inPre = false;
+        
+        for (let line of lines) {
+            if (line.includes('<pre>')) inPre = true;
+            if (line.includes('</pre>')) inPre = false;
+            if (line.includes('<ul>')) inList = true;
+            if (line.includes('</ul>')) inList = false;
+            
+            // Skip wrapping for special elements
+            if (inPre || inList || 
+                line.startsWith('<h') || 
+                line.startsWith('<ul') || 
+                line.startsWith('<ol') || 
+                line.startsWith('<li') ||
+                line.startsWith('<blockquote') ||
+                line.startsWith('<hr') ||
+                line.startsWith('<pre') ||
+                line.trim() === '') {
+                result.push(line);
+            } else if (line.trim()) {
+                result.push(line);
+            }
+        }
+        
+        return result.join('\n');
+    }
+
     function appendMessage(role, content){
         const container = document.getElementById('messagesContainer'); 
         const isUser = role === 'user';
@@ -753,7 +856,11 @@
         wrapper.className = 'message-wrapper';
         const msg = document.createElement('div'); 
         msg.className = 'message ' + (isUser ? 'user-message' : 'assistant-message');
-        msg.innerHTML = `<div class="message-header"><div class="avatar ${isUser ? 'user-avatar' : 'assistant-avatar'}">${isUser ? '👤' : '🤖'}</div><strong>${isUser ? 'You' : 'Assistant'}</strong></div><div class="message-content">${escapeHtml(content)}</div>`;
+        
+        // Parse markdown for assistant messages, escape HTML for user messages
+        const formattedContent = isUser ? escapeHtml(content) : parseMarkdown(content);
+        
+        msg.innerHTML = `<div class="message-header"><div class="avatar ${isUser ? 'user-avatar' : 'assistant-avatar'}">${isUser ? '👤' : '🤖'}</div><strong>${isUser ? 'You' : 'Assistant'}</strong></div><div class="message-content">${formattedContent}</div>`;
         wrapper.appendChild(msg); 
         container.appendChild(wrapper); 
         container.scrollTop = container.scrollHeight;
