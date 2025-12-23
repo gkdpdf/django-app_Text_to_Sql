@@ -361,6 +361,82 @@ def entity_resolver(user_query, catalog, session_data, feedback=None, module_id=
         except Exception as e:
             print(f"⚠️ Config load error: {e}")
     
+    # === RCA SELECTION FEEDBACK ===
+    if feedback and feedback.get('type') == 'rca_selection':
+        selected_option = feedback.get('selected_option', '')
+        context = feedback.get('clarification_context', {})
+        
+        # Check if user declined RCA
+        if selected_option == '❌ No RCA - Continue without':
+            print("📋 User declined RCA selection")
+            session_data['selected_rca'] = None
+            session_data['rca_declined'] = True
+        else:
+            # Find the selected RCA
+            rca_list = context.get('rca_list', [])
+            selected_rca = None
+            
+            for rca in rca_list:
+                title = rca.get('title', '')
+                if title and title in selected_option:
+                    selected_rca = rca
+                    break
+            
+            if selected_rca:
+                print(f"📋 RCA selected: {selected_rca.get('title')}")
+                session_data['selected_rca'] = selected_rca
+                # Add RCA content to the query context (hidden from user)
+                session_data['rca_context_addition'] = f"\n[Apply this business rule: {selected_rca.get('title')}: {selected_rca.get('content')}]"
+            else:
+                print("⚠️ Could not find selected RCA")
+                session_data['selected_rca'] = None
+        
+        # Continue with original query
+        original_query = session_data.get('original_user_query', user_query)
+        return entity_resolver(original_query, catalog, session_data, None, module_id)
+    
+    # === CHECK FOR RCA KEYWORD IN QUERY ===
+    query_to_check = user_query if user_query else session_data.get('original_user_query', '')
+    query_lower = query_to_check.lower()
+    
+    # Get context settings to check if RCA is enabled
+    context_settings = session_data.get('context_settings', {})
+    use_rca = context_settings.get('use_rca', True)  # Default ON
+    
+    # Check if query contains "rca" AND RCA toggle is ON AND we haven't already asked/declined
+    if 'rca' in query_lower and use_rca and not feedback and 'selected_rca' not in session_data and 'rca_declined' not in session_data:
+        rca_list = config.get('rca_list', [])
+        
+        if rca_list and len(rca_list) > 0:
+            print(f"📋 RCA keyword detected - asking for RCA selection")
+            
+            # Build options
+            options = []
+            for rca in rca_list:
+                title = rca.get('title', '')
+                content = rca.get('content', '')
+                if title:
+                    # Show title and preview of content
+                    preview = content[:80] + '...' if len(content) > 80 else content
+                    option_text = f"📊 {title}"
+                    if preview:
+                        option_text += f"\n    {preview}"
+                    options.append(option_text)
+            
+            # Add option to decline
+            options.append("❌ No RCA - Continue without")
+            
+            return {
+                "needs_clarification": True,
+                "message": "Which RCA (Root Cause Analysis) rule would you like to apply?",
+                "options": options,
+                "subtype": "rca_selection",
+                "clarification_context": {"rca_list": rca_list},
+                "allow_custom": False
+            }
+    elif 'rca' in query_lower and not use_rca:
+        print(f"📋 RCA keyword detected but RCA toggle is OFF - skipping RCA selection")
+    
     # === DATE COLUMN SELECTION ===
     if feedback and feedback.get('type') == 'date_column_selection':
         selected_option = feedback.get('selected_option', '')
@@ -714,7 +790,7 @@ Extract ALL entities. Add synonyms to search_terms. Do NOT extract temporal term
 # 🧠 SQL GENERATION
 # ============================================================
 
-def generate_sql_with_llm(user_query, entities, config, intent="total", temporal_info=None, agg_info=None, selected_date_column=None, context_settings=None):
+def generate_sql_with_llm(user_query, entities, config, intent="total", temporal_info=None, agg_info=None, selected_date_column=None, context_settings=None, session_data=None):
     """Generate SQL with full context including RCA, POS, Metrics, Extra Suggestions"""
     
     print("\n" + "="*80)
@@ -725,6 +801,9 @@ def generate_sql_with_llm(user_query, entities, config, intent="total", temporal
     if context_settings is None:
         context_settings = {}
     
+    if session_data is None:
+        session_data = {}
+    
     use_kg = context_settings.get('use_kg', True)
     use_relationships = context_settings.get('use_relationships', True)
     use_rca = context_settings.get('use_rca', True)
@@ -733,24 +812,44 @@ def generate_sql_with_llm(user_query, entities, config, intent="total", temporal
     use_extra_suggestions = context_settings.get('use_extra_suggestions', True)
     
     # Log what's being used
-    print(f"📊 Context: KG={'✅' if use_kg else '❌'} | Rel={'✅' if use_relationships else '❌'} | RCA={'✅' if use_rca else '❌'} | POS={'✅' if use_pos else '❌'} | Extra={'✅' if use_extra_suggestions else '❌'}")
+    print(f"📊 Context: KG={'✅' if use_kg else '❌'} | Rel={'✅' if use_relationships else '❌'} | RCA={'✅' if use_rca else '❌'} | Metrics={'✅' if use_metrics else '❌'} | POS={'✅' if use_pos else '❌'} | Extra={'✅' if use_extra_suggestions else '❌'}")
     
     table_columns = config.get('table_columns', {})
     kg_data = config.get('knowledge_graph_data', {}) if use_kg else {}
     relationships = config.get('relationships', []) if use_relationships else []
     
-    # Load RCA context (only if enabled)
-    rca_list = config.get('rca_list', []) if use_rca else []
+    # === CHECK FOR USER-SELECTED RCA (from "RCA" keyword in query) ===
+    selected_rca = session_data.get('selected_rca')
+    
+    # Build the enhanced query with RCA content appended
+    enhanced_query = user_query
     rca_context = ""
-    if rca_list and use_rca:
-        rca_context = "\n\nBUSINESS RULES (RCA):\n"
-        for rca in rca_list:
-            title = rca.get('title', '')
-            content = rca.get('content', '')
-            if title or content:
-                rca_context += f"• {title}: {content}\n"
-        rca_context += "(Use these rules to guide calculations, but keep the query simple and executable)\n"
-        print(f"📋 RCA Rules loaded: {len(rca_list)} rules")
+    
+    if selected_rca:
+        # Append the RCA content to the query (hidden from user, only for LLM)
+        rca_title = selected_rca.get('title', '')
+        rca_content = selected_rca.get('content', '')
+        
+        # This is the key - concatenate RCA content to query
+        enhanced_query = f"{user_query}\n\n[APPLY THIS ANALYSIS RULE: {rca_title} - {rca_content}]"
+        
+        rca_context = f"\n\nSPECIFIC ANALYSIS RULE TO APPLY:\n• {rca_title}: {rca_content}\n(Follow this rule strictly for the analysis)\n"
+        print(f"📋 SELECTED RCA appended to query: {rca_title}")
+        print(f"   Content: {rca_content[:100]}...")
+    elif use_rca:
+        # Load all RCA rules if toggle is ON but no specific RCA selected
+        rca_list = config.get('rca_list', [])
+        if rca_list:
+            rca_context = "\n\nBUSINESS RULES (RCA):\n"
+            for rca in rca_list:
+                title = rca.get('title', '')
+                content = rca.get('content', '')
+                if title or content:
+                    rca_context += f"• {title}: {content}\n"
+            rca_context += "(Use these rules to guide calculations)\n"
+            print(f"📋 RCA Rules loaded: {len(rca_list)} rules")
+        else:
+            print(f"📋 RCA: No rules defined")
     else:
         print(f"📋 RCA: Disabled")
     
@@ -768,15 +867,17 @@ def generate_sql_with_llm(user_query, entities, config, intent="total", temporal
     else:
         print(f"🏷️ POS: Disabled")
     
-    # Load Metrics context
+    # Load Metrics context (only if enabled)
     metrics_data = config.get('metrics_data', {}) if use_metrics else {}
     metrics_context = ""
-    if metrics_data:
+    if metrics_data and use_metrics:
         metrics_context = "\n\nMETRICS DEFINITIONS:\n"
         for metric_name, metric_desc in metrics_data.items():
             if metric_name and metric_desc:
                 metrics_context += f"• {metric_name}: {metric_desc}\n"
-        print(f"📊 Metrics loaded: {len(metrics_data)} metrics")
+        print(f"📈 Metrics loaded: {len(metrics_data)} metrics")
+    else:
+        print(f"📈 Metrics: Disabled")
     
     # Load Extra Suggestions (only if enabled)
     extra_suggestions = config.get('extra_suggestions', '') if use_extra_suggestions else ''
@@ -868,9 +969,10 @@ def generate_sql_with_llm(user_query, entities, config, intent="total", temporal
     where_clause = " AND ".join(where_conditions) if where_conditions else ""
     
     # Build comprehensive prompt with all context
+    # Use enhanced_query which has RCA content appended (if selected)
     prompt = f"""Generate a SINGLE, SIMPLE PostgreSQL query for this request.
 
-USER QUERY: {user_query}
+USER QUERY: {enhanced_query}
 INTENT: {intent}
 
 SCHEMA:
@@ -893,6 +995,7 @@ RULES:
 7. For simple sales queries: just SUM the quantity or calculate quantity * price
 8. Avoid overly complex CTEs unless absolutely necessary
 9. Keep it simple - basic SELECT, JOIN, WHERE, GROUP BY, ORDER BY
+10. If an ANALYSIS RULE is provided in the query, follow it strictly
 
 Generate ONLY the SQL:
 """
@@ -1131,7 +1234,10 @@ def invoke_graph(user_query, module_id, session_data=None, feedback=None, stream
             'temporal_info',
             'agg_info',
             'intent',
-            'config'
+            'config',
+            'selected_rca',           # Clear selected RCA
+            'rca_declined',           # Clear RCA declined flag
+            'rca_context_addition'    # Clear RCA context
         ]
         for key in keys_to_clear:
             session_data.pop(key, None)
@@ -1210,7 +1316,8 @@ def invoke_graph(user_query, module_id, session_data=None, feedback=None, stream
             temporal_info, 
             agg_info,
             selected_date_column,
-            effective_context_settings  # Pass context settings for RCA, POS, etc.
+            effective_context_settings,
+            session_data  # Pass session_data for selected RCA
         )
         
         result = execute_sql(sql)

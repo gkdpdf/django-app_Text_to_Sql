@@ -156,6 +156,14 @@
                             </label>
 
                             <label class="toggle-item">
+                                <input type="checkbox" id="useMetrics" checked onchange="updateContextSettings()">
+                                <span class="toggle-label">
+                                    <span class="toggle-icon">📈</span>
+                                    Metrics
+                                </span>
+                            </label>
+
+                            <label class="toggle-item">
                                 <input type="checkbox" id="useExtraSuggestions" checked onchange="updateContextSettings()">
                                 <span class="toggle-label">
                                     <span class="toggle-icon">💡</span>
@@ -166,7 +174,7 @@
                             <label class="toggle-item">
                                 <input type="checkbox" id="usePOS" onchange="updateContextSettings()">
                                 <span class="toggle-label">
-                                    <span class="toggle-icon">📝</span>
+                                    <span class="toggle-icon">🏷️</span>
                                     POS Tagging
                                 </span>
                             </label>
@@ -175,7 +183,7 @@
 
                     <div class="context-summary">
                         <span class="summary-text" id="contextSummary">
-                            Using: Knowledge Graph, Relationships, RCA, Extra Suggestions
+                            Using: Knowledge Graph, Relationships, RCA, Metrics, Extra Suggestions
                         </span>
                     </div>
                 </div>
@@ -275,11 +283,13 @@
 
     function updateContextSettings(){
         const useRCA = document.getElementById('useRCA') ? document.getElementById('useRCA').checked : true;
+        const useMetrics = document.getElementById('useMetrics') ? document.getElementById('useMetrics').checked : true;
         const useExtraSuggestions = document.getElementById('useExtraSuggestions') ? document.getElementById('useExtraSuggestions').checked : true;
         const usePOS = document.getElementById('usePOS') ? document.getElementById('usePOS').checked : false;
 
         const activeContexts = ['Knowledge Graph', 'Relationships'];
         if (useRCA) activeContexts.push('RCA');
+        if (useMetrics) activeContexts.push('Metrics');
         if (useExtraSuggestions) activeContexts.push('Extra Suggestions');
         if (usePOS) activeContexts.push('POS Tagging');
 
@@ -287,7 +297,7 @@
         const el = document.getElementById('contextSummary');
         if (el) el.textContent = summary;
 
-        renderHeaderStatus({ useRCA, useExtraSuggestions, usePOS });
+        renderHeaderStatus({ useRCA, useMetrics, useExtraSuggestions, usePOS });
     }
 
     function getContextSettings(){
@@ -295,6 +305,7 @@
             use_kg: true,
             use_relationships: true,
             use_rca: document.getElementById('useRCA') ? document.getElementById('useRCA').checked : true,
+            use_metrics: document.getElementById('useMetrics') ? document.getElementById('useMetrics').checked : true,
             use_extra_suggestions: document.getElementById('useExtraSuggestions') ? document.getElementById('useExtraSuggestions').checked : true,
             use_pos: document.getElementById('usePOS') ? document.getElementById('usePOS').checked : false
         };
@@ -303,12 +314,13 @@
     function renderHeaderStatus(flags){
         const container = document.getElementById('headerContextStatus');
         if(!container) return;
-        const kgBadge = `<span class="status-badge status-on" title="Knowledge Graph">KG: On</span>`;
-        const relBadge = `<span class="status-badge status-on" title="Relationships">Rel: On</span>`;
-        const rca = flags.useRCA ? `<span class="status-badge status-on" title="RCA enabled">RCA: On</span>` : `<span class="status-badge status-off" title="RCA disabled">RCA: Off</span>`;
-        const extra = flags.useExtraSuggestions ? `<span class="status-badge status-on" title="Extra Suggestions enabled">Extra: On</span>` : `<span class="status-badge status-off" title="Extra: Off">Extra: Off</span>`;
-        const pos = flags.usePOS ? `<span class="status-badge status-on" title="POS enabled">POS: On</span>` : `<span class="status-badge status-off" title="POS disabled">POS: Off</span>`;
-        container.innerHTML = `${kgBadge}${relBadge}${rca}${extra}${pos}`;
+        const kgBadge = `<span class="status-badge status-on" title="Knowledge Graph">KG</span>`;
+        const relBadge = `<span class="status-badge status-on" title="Relationships">Rel</span>`;
+        const rca = flags.useRCA ? `<span class="status-badge status-on" title="RCA enabled">RCA</span>` : `<span class="status-badge status-off" title="RCA disabled">RCA</span>`;
+        const metrics = flags.useMetrics ? `<span class="status-badge status-on" title="Metrics enabled">Metrics</span>` : `<span class="status-badge status-off" title="Metrics disabled">Metrics</span>`;
+        const extra = flags.useExtraSuggestions ? `<span class="status-badge status-on" title="Extra Suggestions enabled">Extra</span>` : `<span class="status-badge status-off" title="Extra disabled">Extra</span>`;
+        const pos = flags.usePOS ? `<span class="status-badge status-on" title="POS enabled">POS</span>` : `<span class="status-badge status-off" title="POS disabled">POS</span>`;
+        container.innerHTML = `${kgBadge}${relBadge}${rca}${metrics}${extra}${pos}`;
     }
 
     document.addEventListener('DOMContentLoaded', () => {
