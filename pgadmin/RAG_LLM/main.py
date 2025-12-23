@@ -366,13 +366,20 @@ def entity_resolver(user_query, catalog, session_data, feedback=None, module_id=
         selected_option = feedback.get('selected_option', '')
         context = feedback.get('clarification_context', {})
         
+        # Check if user chose "Let AI Decide"
+        if 'Let AI Decide' in selected_option or '🤖' in selected_option:
+            print("🤖 User selected: Let AI Decide - AI will analyze without predefined rules")
+            session_data['selected_rca'] = None
+            session_data['rca_declined'] = False
+            session_data['ai_rca_mode'] = True  # Flag for AI-driven RCA
         # Check if user declined RCA
-        if selected_option == '❌ No RCA - Continue without':
+        elif 'No RCA' in selected_option or '❌' in selected_option:
             print("📋 User declined RCA selection")
             session_data['selected_rca'] = None
             session_data['rca_declined'] = True
+            session_data['ai_rca_mode'] = False
         else:
-            # Find the selected RCA
+            # Find the selected RCA from predefined list
             rca_list = context.get('rca_list', [])
             selected_rca = None
             
@@ -385,11 +392,11 @@ def entity_resolver(user_query, catalog, session_data, feedback=None, module_id=
             if selected_rca:
                 print(f"📋 RCA selected: {selected_rca.get('title')}")
                 session_data['selected_rca'] = selected_rca
-                # Add RCA content to the query context (hidden from user)
-                session_data['rca_context_addition'] = f"\n[Apply this business rule: {selected_rca.get('title')}: {selected_rca.get('content')}]"
+                session_data['ai_rca_mode'] = False
             else:
                 print("⚠️ Could not find selected RCA")
                 session_data['selected_rca'] = None
+                session_data['ai_rca_mode'] = False
         
         # Continue with original query
         original_query = session_data.get('original_user_query', user_query)
@@ -407,11 +414,16 @@ def entity_resolver(user_query, catalog, session_data, feedback=None, module_id=
     if 'rca' in query_lower and use_rca and not feedback and 'selected_rca' not in session_data and 'rca_declined' not in session_data:
         rca_list = config.get('rca_list', [])
         
+        print(f"📋 RCA keyword detected - asking for RCA selection")
+        
+        # Build options
+        options = []
+        
+        # Add "Let AI Decide" option first
+        options.append("🤖 Let AI Decide\n    AI will analyze and find root cause automatically")
+        
+        # Add predefined RCA rules from module
         if rca_list and len(rca_list) > 0:
-            print(f"📋 RCA keyword detected - asking for RCA selection")
-            
-            # Build options
-            options = []
             for rca in rca_list:
                 title = rca.get('title', '')
                 content = rca.get('content', '')
@@ -422,18 +434,18 @@ def entity_resolver(user_query, catalog, session_data, feedback=None, module_id=
                     if preview:
                         option_text += f"\n    {preview}"
                     options.append(option_text)
-            
-            # Add option to decline
-            options.append("❌ No RCA - Continue without")
-            
-            return {
-                "needs_clarification": True,
-                "message": "Which RCA (Root Cause Analysis) rule would you like to apply?",
-                "options": options,
-                "subtype": "rca_selection",
-                "clarification_context": {"rca_list": rca_list},
-                "allow_custom": False
-            }
+        
+        # Add option to decline
+        options.append("❌ No RCA - Continue without analysis")
+        
+        return {
+            "needs_clarification": True,
+            "message": "How would you like to perform the Root Cause Analysis?",
+            "options": options,
+            "subtype": "rca_selection",
+            "clarification_context": {"rca_list": rca_list},
+            "allow_custom": False
+        }
     elif 'rca' in query_lower and not use_rca:
         print(f"📋 RCA keyword detected but RCA toggle is OFF - skipping RCA selection")
     
@@ -820,12 +832,19 @@ def generate_sql_with_llm(user_query, entities, config, intent="total", temporal
     
     # === CHECK FOR USER-SELECTED RCA (from "RCA" keyword in query) ===
     selected_rca = session_data.get('selected_rca')
+    ai_rca_mode = session_data.get('ai_rca_mode', False)
     
     # Build the enhanced query with RCA content appended
     enhanced_query = user_query
     rca_context = ""
     
-    if selected_rca:
+    if ai_rca_mode:
+        # AI will decide - add instruction for AI to perform root cause analysis
+        enhanced_query = f"{user_query}\n\n[PERFORM ROOT CAUSE ANALYSIS: Analyze the data to identify patterns, anomalies, and potential root causes. Look for trends, outliers, and contributing factors.]"
+        
+        rca_context = "\n\nAI ROOT CAUSE ANALYSIS MODE:\nAnalyze the data to identify:\n• Key patterns and trends\n• Anomalies or outliers\n• Contributing factors\n• Potential root causes\n• Actionable insights\n(Provide comprehensive analysis without predefined rules)\n"
+        print(f"🤖 AI RCA Mode: AI will analyze and find root causes automatically")
+    elif selected_rca:
         # Append the RCA content to the query (hidden from user, only for LLM)
         rca_title = selected_rca.get('title', '')
         rca_content = selected_rca.get('content', '')
@@ -1118,7 +1137,7 @@ def execute_sql(sql):
 # 📝 FORMAT RESULTS - Descriptive Response Generation
 # ============================================================
 
-def format_results(data, intent, temporal_info=None, user_query=None, selected_rca=None):
+def format_results(data, intent, temporal_info=None, user_query=None, selected_rca=None, ai_rca_mode=False):
     """Format results with descriptive response using LLM"""
     if not data:
         return "No results found for your query."
@@ -1151,13 +1170,63 @@ def format_results(data, intent, temporal_info=None, user_query=None, selected_r
     # Generate descriptive response using LLM
     try:
         rca_context = ""
-        if selected_rca:
+        analysis_type = "standard"
+        
+        if ai_rca_mode:
+            analysis_type = "ai_rca"
+            rca_context = "\nAI ROOT CAUSE ANALYSIS MODE: Perform comprehensive analysis to identify patterns, anomalies, trends, and potential root causes."
+        elif selected_rca:
+            analysis_type = "predefined_rca"
             rca_context = f"\nApplied RCA Rule: {selected_rca.get('title', '')} - {selected_rca.get('content', '')}"
         
-        prompt = f"""Generate a clear, descriptive response for this data query result.
+        # Different prompts based on analysis type
+        if ai_rca_mode:
+            prompt = f"""Perform a comprehensive ROOT CAUSE ANALYSIS on this data.
+
+User Query: {user_query or 'Data query'}
+
+Data Results:
+{data_summary}
+
+Raw Data (all rows, max 20): {json.dumps(data[:20], default=str)}
+
+Provide a detailed analysis including:
+1. **Summary**: Brief overview of the data
+2. **Key Findings**: Main observations from the data
+3. **Patterns & Trends**: Any patterns, trends, or correlations identified
+4. **Anomalies**: Any outliers or unusual data points
+5. **Root Cause Analysis**: Potential reasons for the observed patterns
+6. **Recommendations**: Actionable suggestions based on the analysis
+
+Format the response with clear sections and bullet points.
+Use ₹ symbol for currency and format numbers with commas (Indian format).
+Be insightful and provide business-relevant observations."""
+
+        elif selected_rca:
+            prompt = f"""Generate a detailed analysis based on the specified RCA rule.
 
 User Query: {user_query or 'Data query'}
 {rca_context}
+
+Data Results:
+{data_summary}
+
+Raw Data (first 10 rows): {json.dumps(data[:10], default=str)}
+
+Instructions:
+1. Apply the specified RCA rule to analyze the data
+2. Provide insights specific to the rule's focus area
+3. Highlight findings relevant to the analysis rule
+4. Use bullet points for clarity
+5. Format numbers with ₹ symbol and commas for Indian currency
+6. Provide actionable recommendations
+
+Response:"""
+
+        else:
+            prompt = f"""Generate a clear, descriptive response for this data query result.
+
+User Query: {user_query or 'Data query'}
 
 Data Results:
 {data_summary}
@@ -1167,22 +1236,21 @@ Raw Data (first 5 rows): {json.dumps(data[:5], default=str)}
 Instructions:
 1. Provide a natural, conversational response
 2. Highlight key insights from the data
-3. If it's an RCA query, explain what the data reveals about the root cause
-4. Use bullet points for multiple insights
-5. Format numbers with ₹ symbol and commas for Indian currency
-6. Keep it concise but informative (2-4 sentences for simple queries, more for RCA)
-7. Don't just state the number - explain what it means
+3. Use bullet points for multiple insights
+4. Format numbers with ₹ symbol and commas for Indian currency
+5. Keep it concise but informative (2-4 sentences)
+6. Don't just state the number - explain what it means
 
 Response:"""
 
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a helpful data analyst. Provide clear, insightful responses about business data. Be concise but descriptive."},
+                {"role": "system", "content": "You are a helpful data analyst. Provide clear, insightful responses about business data. Be concise but descriptive. For RCA queries, provide comprehensive analysis."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,
-            max_tokens=500
+            max_tokens=800 if ai_rca_mode else 500
         )
         
         descriptive_response = response.choices[0].message.content.strip()
@@ -1313,7 +1381,8 @@ def invoke_graph(user_query, module_id, session_data=None, feedback=None, stream
             'config',
             'selected_rca',           # Clear selected RCA
             'rca_declined',           # Clear RCA declined flag
-            'rca_context_addition'    # Clear RCA context
+            'rca_context_addition',   # Clear RCA context
+            'ai_rca_mode'             # Clear AI RCA mode flag
         ]
         for key in keys_to_clear:
             session_data.pop(key, None)
@@ -1419,10 +1488,11 @@ def invoke_graph(user_query, module_id, session_data=None, feedback=None, stream
         # Get the original query and selected RCA for descriptive response
         original_query = session_data.get('original_user_query', user_query) or query_for_sql
         selected_rca = session_data.get('selected_rca')
+        ai_rca_mode = session_data.get('ai_rca_mode', False)
         
         return {
             "type": "response",
-            "message": format_results(data, intent, temporal_info, original_query, selected_rca),
+            "message": format_results(data, intent, temporal_info, original_query, selected_rca, ai_rca_mode),
             "sql": sql,
             "data": data,
             "chart": chart,
