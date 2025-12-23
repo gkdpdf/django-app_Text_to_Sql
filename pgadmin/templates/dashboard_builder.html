@@ -284,15 +284,34 @@ async function loadColumns() {
     availableColumns = [];
     console.log('Loading columns for tables:', MODULE_TABLES);
     
+    if (!MODULE_TABLES || MODULE_TABLES.length === 0) {
+        console.warn('No tables configured in module');
+        return availableColumns;
+    }
+    
     for (const table of MODULE_TABLES) {
         const tableName = typeof table === 'string' ? table : (table.name || table.table_name || '');
         if (!tableName) continue;
         
         try {
             console.log('Fetching columns for:', tableName);
-            const r = await fetch(`/api/table-columns/?table=${encodeURIComponent(tableName)}`);
+            
+            // Try dashboard-specific endpoint first, then fallback to general API
+            let r = await fetch(`/dashboard/api/columns/?table=${encodeURIComponent(tableName)}`);
+            
+            if (!r.ok) {
+                // Fallback to general API
+                console.log('Trying fallback API for:', tableName);
+                r = await fetch(`/api/table-columns/?table=${encodeURIComponent(tableName)}`);
+            }
+            
+            if (!r.ok) {
+                console.error('API error for', tableName, ':', r.status);
+                continue;
+            }
+            
             const d = await r.json();
-            console.log('Columns for', tableName, ':', d);
+            console.log('Columns response for', tableName, ':', d);
             
             if (d.columns && d.columns.length > 0) {
                 d.columns.forEach(c => {
@@ -302,6 +321,8 @@ async function loadColumns() {
                         type: typeof c === 'string' ? 'unknown' : (c.type || 'unknown')
                     });
                 });
+            } else if (d.error) {
+                console.error('Error from API:', d.error);
             }
         } catch(e) { 
             console.error('Error loading columns for', tableName, e); 

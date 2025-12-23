@@ -1034,7 +1034,13 @@ def get_conversations(request):
     if not module_id:
         return JsonResponse({"conversations": []})
     try:
-        convs = Conversation.objects.filter(module_id=module_id).order_by("-updated_at")[:50]
+        # Exclude dashboard conversations (session_id starting with 'dashboard_')
+        convs = Conversation.objects.filter(
+            module_id=module_id
+        ).exclude(
+            session_id__startswith='dashboard_'
+        ).order_by("-updated_at")[:50]
+        
         out = []
         for c in convs:
             out.append({
@@ -1544,3 +1550,19 @@ def dashboard_filter_values_api(request):
     except Exception as e:
         logger.exception("Filter values error")
         return JsonResponse({"error": str(e), "values": []}, status=500)
+
+
+def dashboard_columns_api(request):
+    """Get columns for a table - for dashboard filter builder"""
+    table_name = request.GET.get("table", "")
+    
+    if not table_name:
+        return JsonResponse({"error": "table parameter required", "columns": []}, status=400)
+    
+    try:
+        columns = _get_table_columns(table_name)
+        logger.info(f"Dashboard columns API: table={table_name}, columns={len(columns)}")
+        return JsonResponse({"columns": columns, "table": table_name})
+    except Exception as e:
+        logger.exception(f"Error getting columns for table {table_name}")
+        return JsonResponse({"error": str(e), "columns": []}, status=500)

@@ -46,7 +46,7 @@ urlpatterns = [
     path('knowledge-graph/upload/', views.upload_knowledge_graph, name='upload_knowledge_graph'),
 
 
-# Dashboard Builder (NEW)
+ # Dashboard Builder
     path('dashboard-builder/<int:module_id>/', views.dashboard_builder_view, name='dashboard_builder'),
     path('dashboard/api/generate/', views.dashboard_generate_api, name='dashboard_generate'),
     path('dashboard/api/save/', views.dashboard_save_api, name='dashboard_save'),
@@ -54,4 +54,5 @@ urlpatterns = [
     path('dashboard/api/get/<int:dashboard_id>/', views.dashboard_get_api, name='dashboard_get'),
     path('dashboard/api/delete/<int:dashboard_id>/', views.dashboard_delete_api, name='dashboard_delete'),
     path('dashboard/api/filter-values/', views.dashboard_filter_values_api, name='dashboard_filter_values'),
+    path('dashboard/api/columns/', views.dashboard_columns_api, name='dashboard_columns'),
 ]
